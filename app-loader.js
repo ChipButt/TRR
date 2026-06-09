@@ -1,8 +1,12 @@
 (function(){
-  var APP_JS = "app.js?build=public-2026-06-09-app-loader-hotfix";
-
-  function showError(err){
-    console.error("Restoration Route loader failed", err);
-    var root = document.getElementById("homeRoot");
-    if(!root) return;
-    root.innerHTML = "<div style='min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0c0905;color:#f6e6bd;font-family:Georgia,serif;text-align:center;padding:24px'><div><h1 style='margin:0 0 12px'>Restoration Route</h1><p style='margin
+  const u='app.js?build=public-2026-06-09-app-loader-hotfix';
+  const lf=String.fromCharCode(10);
+  function fail(e){console.error('Restoration Route loader failed',e);const r=document.getElementById('homeRoot');if(r)r.textContent='Restoration Route could not start. Please refresh.';}
+  function patch(s){
+    s=s.replace(/value\.split\(\s*\/\s*\n\s*\/\s*\)/,'value.split(/\\r?\\n/)');
+    s=s.replace(/function shortName\(n\)\{[\s\S]*?function wrap\(/,
+      'function shortName(n){return n'
+      +'.replace("The Piston Club","PISTON\\\\nCLUB")'
+      +'.replace("Oily Rag","OILY\\\\nRAG")'
+      +'.replace("Seven Mile","SEVEN\\\\nMILE")'
+      +'.replace("Mr. Watson’s","MR.\\\\nW
