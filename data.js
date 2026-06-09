@@ -1,4 +1,16 @@
-(function(){
-  var src="https://cdn.jsdelivr.net/gh/ChipButt/TRR@4c6946f2e45b0e8ff6d2f4d672a9e0d6a6c31638/data.js";
-  document.write('<script src="'+src+'"><\/script>');
-  document.write('<script>(function(){var d=window.RESTORATION_ROUTE_DATA;if(!d||!d.assets)return;for(var i=1;i<=8;i++){d.assets["venue"+i]="assets/8_venue_assets_venue_"+i+"_ui.webp";}d.tabAssetOverrides=d.tabAssetOverrides||{};for(var j=1;j<=8;j++){d.tabAssetOverrides["assets/venue_"+j+"_ui.jpg"]="assets/8_venue
+window.RESTORATION_ROUTE_DATA = {
+  "assets": {
+    "home": "assets/home_ui.webp",
+    "menu": "assets/menu_ui.webp",
+    "scanner": "assets/scanner_ui.webp",
+    "directory": "assets/8_venue_assets_garage_directory_ui.webp",
+    "venue1": "assets/8_venue_assets_venue_1_ui.webp",
+    "venue2": "assets/8_venue_assets_venue_2_ui.webp",
+    "venue3": "assets/8_venue_assets_venue_3_ui.webp",
+    "venue4": "assets/8_venue_assets_venue_4_ui.webp",
+    "venue5": "assets/8_venue_assets_venue_5_ui.webp",
+    "venue6": "assets/8_venue_assets_venue_6_ui.webp",
+    "venue7": "assets/8_venue_assets_venue_7_ui.webp",
+    "venue8": "assets/8_venue_assets_venue_8_ui.webp"
+  }
+};
