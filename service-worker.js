@@ -1,4 +1,4 @@
-const APP_BUILD = "public-2026-05-24-self-updating-auth-scanner-layout";
+const APP_BUILD = "venue-ui-2026-06-19-v3";
 const CACHE = "restoration-route-public-static-" + APP_BUILD;
 const ASSETS = [
   'index.html',
@@ -63,14 +63,6 @@ const ASSETS = [
   'assets/scanner_ui.webp',
   'assets/vehicle_broken_placeholder.png',
   'assets/vehicle_fixed_placeholder.png',
-  'assets/venue_1_ui.jpg',
-  'assets/venue_2_ui.jpg',
-  'assets/venue_3_ui.jpg',
-  'assets/venue_4_ui.jpg',
-  'assets/venue_5_ui.jpg',
-  'assets/venue_6_ui.jpg',
-  'assets/venue_7_ui.jpg',
-  'assets/venue_8_ui.jpg',
   'assets/wall_map_exact_from_json.webp',
 ];
 
