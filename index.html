@@ -17,5 +17,199 @@
 <script src="data.js?build=public-2026-05-24-self-updating-auth-scanner-layout"></script>
 <script src="jsQR.js?build=public-2026-05-24-self-updating-auth-scanner-layout"></script>
 <script src="app.js?build=public-2026-05-24-self-updating-auth-scanner-layout"></script>
+<script type="module">
+import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+
+const AUTH_SUCCESS_MESSAGE_KEY = "restorationRouteAuthSuccessMessage";
+
+function firebaseParts(){
+  const config = window.RESTORATION_ROUTE_DATA && window.RESTORATION_ROUTE_DATA.firebaseConfig;
+  if(!config) throw new Error("Firebase config is missing.");
+  const app = getApps().length ? getApp() : initializeApp(config);
+  return { auth:getAuth(app), db:getFirestore(app) };
+}
+
+function escapeHtml(value){
+  return String(value || "").replace(/[&<>\"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
+}
+
+function showAuthError(message){
+  const card = document.querySelector("#authPanel .authCard");
+  if(!card) return;
+  let error = card.querySelector(".authError");
+  if(!error){
+    error = document.createElement("p");
+    error.className = "authError";
+    const title = card.querySelector("h2");
+    if(title) title.insertAdjacentElement("afterend", error);
+    else card.prepend(error);
+  }
+  error.innerHTML = escapeHtml(message || "Something went wrong. Please check the details and try again.");
+}
+
+function friendlyAuthMessage(e, fallback){
+  const code = (e && e.code) || "";
+  const msg = String((e && e.message) || e || "");
+  if(code.includes("email-already-in-use") || msg.includes("email-already-in-use")) return "This email already has an account. Choose ‘Already have an account? Sign in’ or use ‘Forgot login details’.";
+  if(code.includes("invalid-credential") || code.includes("wrong-password") || msg.includes("INVALID_LOGIN_CREDENTIALS")) return "Those login details do not match. Check the email and password, or use ‘Forgot login details’.";
+  if(code.includes("user-not-found")) return "No account was found for that email address. Check the email or create a new account.";
+  if(code.includes("invalid-email")) return "That email address does not look right. Please check it and try again.";
+  if(code.includes("weak-password")) return "That password is too short. Please use at least 6 characters.";
+  if(code.includes("too-many-requests")) return "Too many attempts. Leave it a moment, then try again or use ‘Forgot login details’.";
+  if(code.includes("network-request-failed")) return "The app could not connect. Check the signal and try again.";
+  if(msg.includes("username is already taken")) return "That username is already taken. Try a slightly different one.";
+  return fallback || "Something went wrong. Please check the details and try again.";
+}
+
+function badUsername(name){
+  const data = window.RESTORATION_ROUTE_DATA || {};
+  const rules = data.usernameRules || { pattern:"^[A-Za-z0-9_-]{3,20}$", blocked:[] };
+  const low = String(name || "").toLowerCase();
+  if(!new RegExp(rules.pattern).test(name)) return "Username must be 3–20 characters using letters, numbers, underscore or hyphen.";
+  if((rules.blocked || []).some(word => low.includes(String(word).toLowerCase()))) return "That username is not allowed.";
+  return "";
+}
+
+function baseRepaired(){
+  const repaired = {};
+  ((window.RESTORATION_ROUTE_DATA || {}).venues || []).forEach(venue => { repaired[venue.id] = false; });
+  return repaired;
+}
+
+async function reserveUsername(db, username, uid){
+  const usernameLower = username.toLowerCase();
+  const usernameRef = doc(db, "usernames", usernameLower);
+  const usernameSnap = await getDoc(usernameRef);
+  if(usernameSnap.exists() && usernameSnap.data().uid !== uid) throw new Error("username is already taken");
+  await setDoc(usernameRef, { uid, username, usernameLower, updatedAt:serverTimestamp() }, { merge:true });
+}
+
+async function finishAuthSuccess(message){
+  if(message) sessionStorage.setItem(AUTH_SUCCESS_MESSAGE_KEY, message);
+  window.location.reload();
+}
+
+async function safeLogin(button){
+  try{
+    button.disabled = true;
+    const email = document.getElementById("authEmail")?.value.trim() || "";
+    const password = document.getElementById("authPassword")?.value || "";
+    if(email) localStorage.setItem("restorationRouteLastEmail", email);
+    const { auth } = firebaseParts();
+    await signInWithEmailAndPassword(auth, email, password);
+    await finishAuthSuccess("");
+  }catch(e){
+    button.disabled = false;
+    showAuthError(friendlyAuthMessage(e, "Could not sign in."));
+  }
+}
+
+async function safeCreateOrCompleteAccount(button){
+  try{
+    button.disabled = true;
+    const email = document.getElementById("authEmail")?.value.trim() || "";
+    const password = document.getElementById("authPassword")?.value || "";
+    const username = document.getElementById("authUsername")?.value.trim() || "";
+    const termsAccepted = !!document.getElementById("authTerms")?.checked;
+    const updateOnly = button.textContent.toLowerCase().includes("save account");
+    const usernameIssue = badUsername(username);
+    if(email) localStorage.setItem("restorationRouteLastEmail", email);
+    if(usernameIssue) throw new Error(usernameIssue);
+    if(!termsAccepted) throw new Error("You need to accept the terms to use the app.");
+
+    const { auth, db } = firebaseParts();
+    let user = auth.currentUser;
+
+    if(updateOnly){
+      if(!user) throw new Error("Please sign in again before saving account details.");
+      await reserveUsername(db, username, user.uid);
+      await updateProfile(user, { displayName:username }).catch(() => {});
+      await setDoc(doc(db, "userVisits", user.uid), {
+        uid:user.uid,
+        email:user.email || email,
+        username,
+        termsAccepted:true,
+        emailVerified:!!user.emailVerified,
+        updatedAt:serverTimestamp()
+      }, { merge:true });
+      await finishAuthSuccess("Account details saved.");
+      return;
+    }
+
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    user = credential.user;
+    await reserveUsername(db, username, user.uid);
+    await updateProfile(user, { displayName:username }).catch(() => {});
+    await sendEmailVerification(user).catch(() => {});
+
+    const userData = {
+      uid:user.uid,
+      email,
+      username,
+      termsAccepted:true,
+      emailVerified:false,
+      repaired:baseRepaired(),
+      completedVehicles:0,
+      prizeEntries:0,
+      pendingPrizeEntries:0,
+      totalPartsRestored:0,
+      currentVehicle:1,
+      routeCompleted:false,
+      hornBroken:false,
+      hornBrokenCount:0,
+      hornRestoredCount:0,
+      log:[],
+      updatedAt:serverTimestamp()
+    };
+    await setDoc(doc(db, "userVisits", user.uid), userData, { merge:true });
+    await setDoc(doc(db, "leaderboard", user.uid), {
+      uid:user.uid,
+      username,
+      completedVehicles:0,
+      prizeEntries:0,
+      pendingPrizeEntries:0,
+      totalPartsRestored:0,
+      updatedAt:serverTimestamp()
+    }, { merge:true }).catch(() => {});
+
+    await finishAuthSuccess("Verification email sent. Progress saves now. Prize entries become eligible once your email is verified.");
+  }catch(e){
+    button.disabled = false;
+    showAuthError(friendlyAuthMessage(e, "Could not create or update that account."));
+  }
+}
+
+document.addEventListener("click", event => {
+  const button = event.target;
+  if(!(button instanceof HTMLElement)) return;
+  if(button.id === "loginButton"){
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    safeLogin(button);
+  }
+  if(button.id === "createAccount"){
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    safeCreateOrCompleteAccount(button);
+  }
+}, true);
+
+const pendingMessage = sessionStorage.getItem(AUTH_SUCCESS_MESSAGE_KEY);
+if(pendingMessage){
+  sessionStorage.removeItem(AUTH_SUCCESS_MESSAGE_KEY);
+  let attempts = 0;
+  const timer = setInterval(() => {
+    attempts += 1;
+    if(typeof window.openProfile === "function" && !document.getElementById("authPanel")){
+      clearInterval(timer);
+      window.openProfile(pendingMessage);
+    }else if(attempts > 24){
+      clearInterval(timer);
+    }
+  }, 250);
+}
+</script>
 </body>
 </html>
