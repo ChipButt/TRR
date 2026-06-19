@@ -122,7 +122,7 @@ async function safeCreateOrCompleteAccount(button){
     const { auth, db } = firebaseParts();
     let user = auth.currentUser;
 
-    if(updateOnly){
+    if(updateOnly || (user && user.email === email)){
       if(!user) throw new Error("Please sign in again before saving account details.");
       await reserveUsername(db, username, user.uid);
       await updateProfile(user, { displayName:username }).catch(() => {});
@@ -134,7 +134,7 @@ async function safeCreateOrCompleteAccount(button){
         emailVerified:!!user.emailVerified,
         updatedAt:serverTimestamp()
       }, { merge:true });
-      await finishAuthSuccess("Account details saved.");
+      await finishAuthSuccess(updateOnly ? "Account details saved." : "Verification email sent. Progress saves now. Prize entries become eligible once your email is verified.");
       return;
     }
 
