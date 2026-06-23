@@ -171,7 +171,7 @@ button{font:inherit}
   grid-template-columns:minmax(0,1fr) auto;
   gap:2px 8px;
   align-items:start;
-  min-height:76px;
+  min-height:108px;
   margin:0 0 5px;
   padding:5px 7px 6px;
   border:1px solid rgba(10,49,86,.18);
@@ -275,7 +275,7 @@ button{font:inherit}
   white-space:nowrap;
 }
 .menuCalendarButton{
-  grid-row:1 / span 5;
+  grid-row:1 / span 8;
   grid-column:2;
   align-self:center;
   border:1px solid #0a3156;
@@ -413,6 +413,12 @@ button{font:inherit}
   width:100%;
   margin:8px 0 10px;
 }
+.stageCardStage .profileCard button:not(.stageCardCloseX){
+  display:block;
+  width:100%;
+  margin-left:0;
+  margin-right:0;
+}
 .stageCardStage .profileCard .profileLogoutAsset{
   display:block;
   width:100%;
@@ -448,6 +454,10 @@ button{font:inherit}
   pointer-events:auto;
   -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain;
+}
+.stageCardStage .popCard.inviteFriendsCard.isMeetupCard{
+  height:560px;
+  max-height:560px;
 }
 .popCard.inviteFriendsCard h2{
   margin:0 0 9px;
@@ -489,6 +499,11 @@ button{font:inherit}
   font-size:13px;
   line-height:1.15;
 }
+.popCard.inviteFriendsCard.isMeetupCard input,
+.popCard.inviteFriendsCard.isMeetupCard textarea{
+  font-size:16px;
+  line-height:1.18;
+}
 .popCard.inviteFriendsCard textarea{min-height:44px}
 .popCard.inviteFriendsCard button{
   padding:8px 10px;
@@ -522,6 +537,17 @@ button{font:inherit}
 .popCard.inviteFriendsCard .socialRow span{font-size:12px;line-height:1.2}
 .popCard.inviteFriendsCard .socialRow em{font-size:12px;line-height:1.2}
 .popCard.inviteFriendsCard .socialPlan div{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.popCard.inviteFriendsCard .socialPlan .socialPlanInvitees{
+  display:grid;
+  gap:2px;
+  margin-top:5px;
+}
+.popCard.inviteFriendsCard .socialPlan .socialPlanInvitees span{
+  display:block;
+  font-size:12px;
+  line-height:1.16;
+  font-weight:800;
+}
 .popCard.inviteFriendsCard .socialFriend{
   position:relative;
   padding-right:42px;
@@ -541,16 +567,6 @@ button{font:inherit}
   font-size:20px!important;
   line-height:1!important;
 }
-.socialFriendActions{
-  display:flex;
-  gap:5px;
-  flex-wrap:wrap;
-  margin-top:6px;
-}
-.socialFriendActions button{
-  font-size:12px!important;
-  padding:6px 9px!important;
-}
 .confirmActions{
   display:grid;
   grid-template-columns:1fr 1fr;
@@ -561,39 +577,13 @@ button{font:inherit}
   width:100%;
   margin:0;
 }
-.messageThread{
-  display:grid;
-  gap:6px;
-  max-height:205px;
-  overflow:auto;
-  margin:8px 0;
-  padding-right:2px;
-}
-.messageRow{
-  border:1px solid rgba(10,49,86,.28);
-  background:rgba(255,248,223,.58);
-  border-radius:9px;
-  padding:7px 8px;
-}
-.messageRow.isMine{
-  background:rgba(10,49,86,.09);
-}
-.messageRow strong,
-.messageRow span{
-  display:block;
-  font-size:13px;
-  line-height:1.22;
-}
-.messageRow strong{font-size:12px;font-weight:900}
-.friendMessageCard #sendFriendMessage,
-.friendMessageCard #backToInviteFriends{
-  width:100%;
-  margin-left:0;
-  margin-right:0;
-}
 .popCard.inviteFriendsCard .meetupWhen{
   grid-template-columns:1fr 1fr;
   gap:8px;
+}
+.popCard.inviteFriendsCard .meetupWhen input{
+  min-height:42px;
+  font-size:16px;
 }
 .popCard.inviteFriendsCard .meetupFriendPicker{
   margin:5px 0 8px;
@@ -612,6 +602,7 @@ button{font:inherit}
   display:grid;
   gap:6px;
   margin:6px 0 8px;
+  min-height:111px;
   max-height:150px;
   overflow:auto;
   padding-right:3px;
@@ -642,6 +633,25 @@ button{font:inherit}
   margin:5px 0 8px;
   font-size:12px;
   font-weight:800;
+}
+.popCard.inviteFriendsCard #meetupVenue{
+  width:100%;
+  height:42px;
+  min-height:42px;
+  margin:5px 0 8px;
+  padding:0 36px 0 10px;
+  border:1px solid rgba(10,49,86,.42);
+  border-radius:8px;
+  background:rgba(255,248,223,.8);
+  color:#0a3156;
+  font-size:16px;
+  font-weight:900;
+  line-height:42px;
+}
+.popCard.inviteFriendsCard #sendMeetupPlan{
+  width:100%;
+  margin-left:0;
+  margin-right:0;
 }
 .webPanel{
   position:absolute;
