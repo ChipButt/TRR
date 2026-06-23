@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "venue-ui-2026-06-23-v28";
+const APP_BUILD = "venue-ui-2026-06-23-v29";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -981,7 +981,7 @@ async function warmAppDataAndAssets({show=false,keepVisible=false}={}){
 }
 async function openDirectory(){
   const token=await preloadAssetsWithOptionalLoader(directoryPageAssets());
-  const prepared=detachedPopupStage(),st=prepared.stage;st.dataset.editorScreen="directory";const bg=DATA.layout.directory.layers.find(l=>l.name.toLowerCase().includes("garage directory ui"))||DATA.layout.directory.layers[0];imgLayer(st,bg,DATA.assets.directory);drawDirectory(st);tabs(st,"directory");bookHome(st);await mountPreparedPopup(prepared.shell,st,token);
+  const prepared=detachedPopupStage(),st=prepared.stage;prepared.shell.classList.add("bookShellLock","bookShellLockBoth");st.dataset.editorScreen="directory";const bg=DATA.layout.directory.layers.find(l=>l.name.toLowerCase().includes("garage directory ui"))||DATA.layout.directory.layers[0];imgLayer(st,bg,DATA.assets.directory);drawDirectory(st);tabs(st,"directory");bookHome(st);await mountPreparedPopup(prepared.shell,st,token);
 }
 function drawDirectory(st){
   const txt=DATA.layout.directory.layers.filter(l=>l.type==="text"),
@@ -1012,7 +1012,7 @@ function openDirections(v){window.open(mapsDirectionsUrl(v),"_blank","noopener")
 async function openVenue(id){
   const v=venueById(id);if(!v)return;
   const token=await preloadAssetsWithOptionalLoader(venuePageAssets(v));
-  const prepared=detachedPopupStage(),st=prepared.stage;st.dataset.editorScreen="venueTemplate";st.dataset.editorVenue=id;const bg={...BOOK_ART_FRAME,r:0,opacity:1,z:0,name:"Venue UI"};imgLayer(st,bg,DATA.assets.venue1);drawVenue(st,v);bookHome(st);tabs(st,id);await mountPreparedPopup(prepared.shell,st,token);
+  const prepared=detachedPopupStage(),st=prepared.stage;prepared.shell.classList.add("bookShellLock","bookShellLockVertical");st.dataset.editorScreen="venueTemplate";st.dataset.editorVenue=id;const bg={...BOOK_ART_FRAME,r:0,opacity:1,z:0,name:"Venue UI"};imgLayer(st,bg,DATA.assets.venue1);drawVenue(st,v);bookHome(st);tabs(st,id);await mountPreparedPopup(prepared.shell,st,token);
 }
 function drawVenue(st,v){
   const tl=DATA.layout.venueTemplate.layers.filter(l=>l.type==="text"),

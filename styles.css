@@ -797,6 +797,19 @@ button{font:inherit}
   justify-content:unset !important;
   overflow:auto !important;
 }
+.popupShell.bookShellLock{
+  overscroll-behavior:none !important;
+  -webkit-overflow-scrolling:auto !important;
+}
+.popupShell.bookShellLockBoth{
+  overflow:hidden !important;
+  touch-action:none;
+}
+.popupShell.bookShellLockVertical{
+  overflow-x:hidden !important;
+  overflow-y:hidden !important;
+  touch-action:pan-x;
+}
 .popupStage{
   position:absolute !important;
   left:var(--popupLeft,0px) !important;
