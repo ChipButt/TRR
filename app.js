@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "venue-ui-2026-06-23-v23";
+const APP_BUILD = "venue-ui-2026-06-23-v24";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -1767,7 +1767,7 @@ async function openInviteFriends(msg="",mode="friends"){
     const friends=data.friends||[],meetups=visibleMeetupPlans(data.meetups||[]),friendRequests=data.friendRequests||[],sentFriendRequests=data.sentFriendRequests||[];
     const venueOptions=routeVenues().map(v=>`<option value="${esc(v.id)}">${esc(v.name)}</option>`).join("");
     const friendRows=friends.map(f=>`<div class="socialRow socialFriend"><button type="button" class="friendRemoveButton" data-remove-friend="${esc(f.uid)}" aria-label="Remove ${esc(f.username||"Friend")}">×</button><strong>${esc(f.username||"Friend")}</strong><span>${Number(f.completedVehicles||0)} vehicles restored · ${Number(f.totalPartsRestored||0)} components restored</span><div class="socialFriendActions"><button type="button" data-message-friend="${esc(f.uid)}">Message</button></div></div>`).join("")||`<p>No friends linked yet.</p>`;
-    const friendChoices=friends.map(f=>`<label class="meetupFriendChoice"><input data-meetup-friend type="checkbox" value="${esc(f.uid)}"><span>${esc(f.username||"Friend")}</span></label>`).join("");
+    const friendChoices=friends.map(f=>`<label class="meetupFriendChoice" data-meetup-friend-choice data-friend-name="${esc(String(f.username||"Friend").toLowerCase())}"><input data-meetup-friend type="checkbox" value="${esc(f.uid)}"><span>${esc(f.username||"Friend")}</span></label>`).join("");
     const requestRows=friendRequests.map(r=>`<div class="socialRow socialRequest"><strong>${esc(r.username||"Friend")}</strong><span>Wants to connect on The Restoration Route.</span><div><button data-friend-request="${esc(r.id)}" data-action="accept">Accept</button><button data-friend-request="${esc(r.id)}" data-action="reject">Reject</button></div></div>`).join("");
     const sentRows=sentFriendRequests.map(r=>`<div class="socialRow"><strong>${esc(r.username||"Friend")}</strong><span>Request sent.</span></div>`).join("");
     const inviteRows=meetups.map(p=>{
@@ -1783,8 +1783,26 @@ async function openInviteFriends(msg="",mode="friends"){
     }).join("")||`<p>No meet-up invitations yet.</p>`;
     const body=d.querySelector("#inviteFriendsBody");
     const inviteMarkup=`<div class="friendSearch"><input id="friendUsernameSearch" autocomplete="off" placeholder="Username"><button id="friendSearchButton">Send Request</button></div>${requestRows?`<h3>Friend Requests</h3><div class="socialRows">${requestRows}</div>`:""}${sentRows?`<h3>Sent Requests</h3><div class="socialRows">${sentRows}</div>`:""}<h3>Linked Friends</h3><div class="socialRows">${friendRows}</div>`;
-    const meetupMarkup=`${friends.length?`<div class="meetupFriendChoices">${friendChoices}</div><select id="meetupVenue">${venueOptions}</select><div class="meetupWhen"><input id="meetupDate" type="date"><input id="meetupTime" type="time"></div><textarea id="meetupNote" rows="2" placeholder="Message or meet-up details"></textarea><button id="sendMeetupPlan">Send Suggestion</button>`:`<p>Add a friend before suggesting a meet-up.</p>`}<h3>Invitations & Replies</h3><div class="socialRows">${inviteRows}</div>`;
+    const meetupMarkup=`${friends.length?`<div class="meetupFriendPicker"><input id="meetupFriendSearch" autocomplete="off" placeholder="Search linked friends"><div id="meetupFriendCount" class="meetupFriendCount">${friends.length} linked friend${friends.length===1?"":"s"} available</div><div class="meetupFriendChoices">${friendChoices}</div><p id="meetupFriendEmpty" class="meetupFriendEmpty" hidden>No linked friends match that search.</p></div><select id="meetupVenue">${venueOptions}</select><div class="meetupWhen"><input id="meetupDate" type="date"><input id="meetupTime" type="time"></div><textarea id="meetupNote" rows="2" placeholder="Message or meet-up details"></textarea><button id="sendMeetupPlan">Send Suggestion</button>`:`<p>Add a friend before suggesting a meet-up.</p>`}<h3>Invitations & Replies</h3><div class="socialRows">${inviteRows}</div>`;
     body.innerHTML=mode==="meetup"?`<h3>Friends</h3>${meetupMarkup}`:inviteMarkup;
+    const meetupFriendSearch=d.querySelector("#meetupFriendSearch"),meetupFriendCount=d.querySelector("#meetupFriendCount"),meetupFriendEmpty=d.querySelector("#meetupFriendEmpty"),meetupFriendChoices=[...d.querySelectorAll("[data-meetup-friend-choice]")];
+    const syncMeetupFriendPicker=()=>{
+      if(!meetupFriendSearch)return;
+      const query=meetupFriendSearch.value.trim().toLowerCase();
+      let visible=0,selected=0;
+      meetupFriendChoices.forEach(choice=>{
+        const input=choice.querySelector("[data-meetup-friend]");
+        if(input?.checked)selected++;
+        const match=!query||String(choice.dataset.friendName||"").includes(query);
+        choice.hidden=!match;
+        if(match)visible++;
+      });
+      if(meetupFriendEmpty)meetupFriendEmpty.hidden=visible!==0;
+      if(meetupFriendCount)meetupFriendCount.textContent=selected?`${selected} friend${selected===1?"":"s"} selected`:`${friends.length} linked friend${friends.length===1?"":"s"} available`;
+    };
+    if(meetupFriendSearch)meetupFriendSearch.oninput=syncMeetupFriendPicker;
+    d.querySelectorAll("[data-meetup-friend]").forEach(input=>input.onchange=syncMeetupFriendPicker);
+    syncMeetupFriendPicker();
     const friendSearchButton=d.querySelector("#friendSearchButton");
     if(friendSearchButton)friendSearchButton.onclick=async()=>{try{const target=await addFriendByUsername(d.querySelector("#friendUsernameSearch").value);refreshMenuSocialSummary();closeCard();openInviteFriends(target.accepted?`${target.username} is now in your friends list.`:`Friend request sent to ${target.username}.`);}catch(e){closeCard();openInviteFriends(e.message||"Could not add that friend.");}};
     const send=d.querySelector("#sendMeetupPlan");
