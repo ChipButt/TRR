@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "venue-ui-2026-06-23-v15";
+const APP_BUILD = "venue-ui-2026-06-23-v16";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -1358,8 +1358,7 @@ async function updateMeetupStatus(planId,status){
 async function openInviteFriends(msg=""){
   if(typeof msg!=="string")msg="";
   if(!requireLogin())return;
-  const d=card(`<h2>Invite Friends</h2>${msg?`<p class="authError">${esc(msg)}</p>`:""}<div id="inviteFriendsBody"><p>Loading friends...</p></div><button data-close>Close</button>`);
-  d.classList.add("inviteFriendsCard");
+  const d=inviteFriendsCard(`<h2>Invite Friends</h2>${msg?`<p class="authError">${esc(msg)}</p>`:""}<div id="inviteFriendsBody"><p>Loading friends...</p></div><button data-close>Close</button>`);
   try{
     const data=await loadSocialData();
     const friends=data.friends||[],meetups=data.meetups||[];
@@ -1506,7 +1505,22 @@ function openIssues(){location.href=`mailto:${DATA.terms.contactEmail}?subject=T
 function openLogout(){card(`<h2>Log Out</h2><p>Progress is saved to your account if online sync has completed.</p><button id="logoutConfirm">Log Out</button><button data-close>Cancel</button>`,()=>{document.getElementById("logoutConfirm").onclick=async()=>{try{if(auth&&fb?.signOut)await fb.signOut(auth)}catch(e){} currentUser=null; state=defaultState(); try{localStorage.removeItem(STORE_KEY);localStorage.removeItem("restorationRouteLastEmail")}catch(e){} closeCard(); renderHome(); openAuthPanel("register")}});}
 function openAdmin(){card(`<h2>Garage Admin</h2><input id="adminCode" placeholder="Code"><button id="adminUnlock">Unlock</button><button data-close>Close</button>`,()=>{document.getElementById("adminUnlock").onclick=()=>{if(document.getElementById("adminCode").value!==ADMIN_CODE)return;closeCard();card(`<h2>Chip’s Big Red Button</h2><button id="repairAll">Repair All Components</button><button id="completeVehicle">Complete Vehicle</button><button id="resetVehicle">Reset Current Vehicle</button><button data-close>Close</button>`,()=>{document.getElementById("repairAll").onclick=async()=>{DATA.venues.forEach(v=>state.repaired[v.id]=true);state.routeCompleted=true;await saveCloud();closeCard();renderHome();openVehicleCompletionRestoration()};document.getElementById("completeVehicle").onclick=async()=>{await completeVehicle("admin_complete");closeCard();renderHome()};document.getElementById("resetVehicle").onclick=async()=>{state.repaired=baseRepaired();state.hornBroken=false;state.routeCompleted=false;storageSet(COMPLETION_NOTICE_KEY,"");await saveCloud();closeCard();renderHome()};})}});}
 function card(html,after){const d=document.createElement("div");d.className="popCard";d.innerHTML=html;overlayRoot.appendChild(d);d.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeCard);if(after)after(d);return d;}
-function closeCard(){overlayRoot.querySelectorAll(".popCard").forEach(c=>c.remove())}
+function inviteFriendsCard(html){
+  const shell=document.createElement("div");
+  shell.className="inviteFriendsShell";
+  shell.dataset.cardShell="inviteFriends";
+  const stage=document.createElement("div");
+  stage.className="inviteFriendsStage";
+  const d=document.createElement("div");
+  d.className="popCard inviteFriendsCard";
+  d.innerHTML=html;
+  stage.appendChild(d);
+  shell.appendChild(stage);
+  overlayRoot.appendChild(shell);
+  d.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeCard);
+  return d;
+}
+function closeCard(){overlayRoot.querySelectorAll(".popCard").forEach(c=>c.remove());overlayRoot.querySelectorAll("[data-card-shell]").forEach(c=>c.remove())}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
 function hornHit(stage,x,y,w,h,hoverLayer=null){
   const b=document.createElement("button");

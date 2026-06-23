@@ -182,41 +182,64 @@ button{font:inherit}
 .popCard input,.popCard textarea{width:100%;border:1px solid #0a3156;background:#fff8df;color:#0a3156;border-radius:9px;padding:9px;margin:8px 0}
 .popCard button{border:1px solid #0a3156;background:#0a3156;color:#f6e6bd;border-radius:10px;padding:9px 12px;margin:4px;font-weight:800}
 .popCard .livePreviewLink{display:inline-block;border:1px solid #0a3156;background:#0a3156;color:#f6e6bd;border-radius:10px;padding:10px 12px;font-weight:800;text-decoration:none}
-.popCard.inviteFriendsCard{
-  width:min(calc(100vw - 8px),420px);
-  max-height:calc(100dvh - 8px);
+.inviteFriendsShell{
+  position:absolute;
+  inset:0;
+  z-index:1000;
+  display:block;
+  pointer-events:auto;
+  background:transparent;
+}
+.inviteFriendsStage{
+  position:absolute;
+  left:var(--stageLeft,0px);
+  top:var(--stageTop,0px);
+  width:390px;
+  height:844px;
+  transform:scale(var(--menuScale,var(--homeScale,1)));
+  transform-origin:top left;
+  pointer-events:none;
+}
+.inviteFriendsStage .popCard.inviteFriendsCard{
+  position:absolute;
+  left:22px;
+  top:76px;
+  transform:none;
+  width:346px;
+  max-height:692px;
   display:block;
   overflow:auto;
-  padding:clamp(7px,3vw,16px);
-  border-radius:clamp(10px,3vw,18px);
+  padding:14px;
+  border-radius:16px;
+  pointer-events:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
 }
 .popCard.inviteFriendsCard h2{
-  flex:0 0 auto;
-  margin:0 0 clamp(4px,1.5vw,8px);
-  font-size:clamp(15px,5.6vw,24px);
+  margin:0 0 9px;
+  font-size:24px;
   line-height:1.05;
 }
 .popCard.inviteFriendsCard .authHint,
 .popCard.inviteFriendsCard .authError{
-  flex:0 0 auto;
-  margin:0 0 clamp(5px,1.8vw,9px);
-  padding:clamp(5px,1.8vw,8px);
-  font-size:clamp(10px,3.6vw,13px);
+  margin:0 0 8px;
+  padding:7px 8px;
+  font-size:13px;
   line-height:1.2;
 }
 .popCard.inviteFriendsCard #inviteFriendsBody{
   min-height:0;
   overflow:visible;
-  padding-right:2px;
+  padding-right:1px;
 }
 .popCard.inviteFriendsCard h3{
-  margin:clamp(6px,2vw,10px) 0 clamp(3px,1.2vw,5px);
-  font-size:clamp(12px,4.2vw,17px);
+  margin:10px 0 5px;
+  font-size:16px;
   line-height:1.08;
 }
 .popCard.inviteFriendsCard p{
-  margin:clamp(4px,1.4vw,7px) 0;
-  font-size:clamp(10px,3.7vw,13px);
+  margin:6px 0;
+  font-size:13px;
   line-height:1.22;
 }
 .popCard.inviteFriendsCard input,
@@ -225,62 +248,51 @@ button{font:inherit}
   width:100%;
   min-width:0;
   max-width:100%;
-  padding:clamp(5px,2vw,8px);
-  margin:clamp(3px,1.2vw,6px) 0;
+  padding:8px;
+  margin:5px 0;
   border-radius:8px;
-  font-size:clamp(10px,3.7vw,14px);
+  font-size:13px;
   line-height:1.15;
 }
-.popCard.inviteFriendsCard textarea{min-height:42px}
+.popCard.inviteFriendsCard textarea{min-height:44px}
 .popCard.inviteFriendsCard button{
-  padding:clamp(5px,2vw,8px) clamp(6px,2.5vw,10px);
-  margin:2px;
+  padding:8px 10px;
+  margin:3px;
   border-radius:8px;
-  font-size:clamp(10px,3.7vw,14px);
+  font-size:13px;
   line-height:1.05;
 }
 .popCard.inviteFriendsCard > button[data-close]{
   display:block;
-  width:min(72px,100%);
-  min-width:0;
+  width:82px;
   max-width:100%;
-  margin-top:clamp(5px,1.8vw,8px);
+  margin-top:9px;
   margin-left:auto;
   margin-right:auto;
 }
 .popCard.inviteFriendsCard .friendSearch{
   grid-template-columns:minmax(0,1fr) auto;
-  gap:clamp(4px,1.8vw,7px);
+  gap:7px;
 }
 .popCard.inviteFriendsCard .friendSearch input{width:100%;min-width:0}
 .popCard.inviteFriendsCard .socialRows{
-  gap:clamp(4px,1.6vw,7px);
-  margin:clamp(4px,1.4vw,7px) 0 clamp(6px,2vw,10px);
+  gap:7px;
+  margin:7px 0 10px;
 }
 .popCard.inviteFriendsCard .socialRow{
   width:100%;
   min-width:0;
   max-width:100%;
-  padding:clamp(5px,1.8vw,8px);
+  padding:8px;
   border-radius:8px;
 }
-.popCard.inviteFriendsCard .socialRow strong{font-size:clamp(11px,3.8vw,15px);line-height:1.12}
-.popCard.inviteFriendsCard .socialRow span{font-size:clamp(9px,3.4vw,13px);line-height:1.2}
-.popCard.inviteFriendsCard .socialRow em{font-size:clamp(9px,3.2vw,12px);line-height:1.2}
+.popCard.inviteFriendsCard .socialRow strong{font-size:15px;line-height:1.12}
+.popCard.inviteFriendsCard .socialRow span{font-size:12px;line-height:1.2}
+.popCard.inviteFriendsCard .socialRow em{font-size:12px;line-height:1.2}
 .popCard.inviteFriendsCard .socialPlan div{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
 .popCard.inviteFriendsCard .meetupWhen{
   grid-template-columns:1fr 1fr;
-  gap:clamp(4px,1.8vw,8px);
-}
-@media (max-width:260px){
-  .popCard.inviteFriendsCard .friendSearch,
-  .popCard.inviteFriendsCard .meetupWhen{
-    grid-template-columns:1fr;
-  }
-  .popCard.inviteFriendsCard .friendSearch button,
-  .popCard.inviteFriendsCard #sendMeetupPlan{
-    width:100%;
-  }
+  gap:8px;
 }
 .webPanel{
   position:absolute;
