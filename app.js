@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "venue-ui-2026-06-23-v22";
+const APP_BUILD = "venue-ui-2026-06-23-v23";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -856,7 +856,7 @@ function menuSocialSummaryMarkup(data,loading=false){
   const planRows=plans.map(p=>{
     const response=currentPlanResponse(p);
     const calendar=response==="confirmed"?`<button class="menuCalendarButton" type="button" data-calendar-plan="${esc(p.id)}">Calendar</button>`:"";
-    return `<div class="menuPlanRow"><strong>${esc(p.venueName||"Meet-up")}</strong><span>${esc(planDateText(p))}</span><span>${esc(planPeopleText(p))} · ${esc(planStatusText(p))}</span>${p.note?`<em>${esc(p.note)}</em>`:""}${calendar}</div>`;
+    return `<div class="menuPlanRow"><strong class="menuPlanVenue">${esc(p.venueName||"Meet-up")}</strong><span class="menuPlanMeta"><span class="menuPlanIcon menuPlanIconCalendar" aria-hidden="true"></span><span>${esc(planDateLineText(p))}</span></span><span class="menuPlanMeta"><span class="menuPlanIcon menuPlanIconClock" aria-hidden="true"></span><span>${esc(planTimeLineText(p))}</span></span><span class="menuPlanPeople">${esc(planPeopleText(p))} · ${esc(planStatusText(p))}</span>${p.note?`<em>${esc(p.note)}</em>`:""}${calendar}</div>`;
   }).join("");
   return `<h3>Upcoming Plans</h3>${loading?`<p>Loading...</p>`:(planRows||`<p>No confirmed or upcoming plans yet.</p>`)}`;
 }
@@ -1461,6 +1461,14 @@ function openUsernameEditor(){stageCard(`<h2>Change Username</h2><p>Enter the pu
 function socialUserId(){return currentUser?.uid||state.uid||"local-test-user";}
 function pairLabel(a,b){return [a,b].sort().join("|");}
 function planDateText(p){return [p.suggestedDate,p.suggestedTime].filter(Boolean).join(" ")||"Time to confirm";}
+function planDateLineText(p){
+  const raw=p?.suggestedDate||"";
+  const parts=/^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if(!parts)return raw||"Date to confirm";
+  const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${Number(parts[3])} ${months[Number(parts[2])-1]||parts[2]} ${parts[1]}`;
+}
+function planTimeLineText(p){return p?.suggestedTime||"Time to confirm";}
 function currentPlanResponse(p,uid=socialUserId()){
   const responses=p?.responses||{};
   if(responses[uid])return responses[uid];

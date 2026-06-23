@@ -169,26 +169,105 @@ button{font:inherit}
   position:relative;
   display:grid;
   grid-template-columns:minmax(0,1fr) auto;
-  gap:2px;
-  align-items:center;
-  min-height:58px;
+  gap:2px 8px;
+  align-items:start;
+  min-height:76px;
   margin:0 0 5px;
-  padding:5px 7px;
+  padding:5px 7px 6px;
   border:1px solid rgba(10,49,86,.18);
   border-radius:8px;
   background:rgba(255,248,223,.42);
 }
-.menuPlanRow strong,
-.menuPlanRow span,
+.menuPlanVenue,
+.menuPlanMeta,
+.menuPlanPeople,
 .menuPlanRow em{
   min-width:0;
   overflow:hidden;
   text-overflow:ellipsis;
 }
-.menuPlanRow strong{font-size:12px;font-weight:900;line-height:1.05;white-space:nowrap}
-.menuPlanRow span{font-size:10px;font-weight:800;line-height:1.1;white-space:nowrap}
+.menuPlanVenue{
+  grid-column:1 / 2;
+  font-size:12px;
+  font-weight:900;
+  line-height:1.05;
+  white-space:nowrap;
+}
+.menuPlanMeta{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  grid-column:1 / 2;
+  font-size:10px;
+  font-weight:900;
+  line-height:1.08;
+  white-space:nowrap;
+}
+.menuPlanPeople{
+  grid-column:1 / 2;
+  font-size:9.5px;
+  font-weight:800;
+  line-height:1.08;
+  white-space:nowrap;
+}
+.menuPlanIcon{
+  position:relative;
+  flex:0 0 10px;
+  width:10px;
+  height:10px;
+  box-sizing:border-box;
+  color:#0a3156;
+}
+.menuPlanIconCalendar{
+  border:1.3px solid currentColor;
+  border-radius:2px;
+}
+.menuPlanIconCalendar::before{
+  content:"";
+  position:absolute;
+  left:-1px;
+  right:-1px;
+  top:2px;
+  border-top:1.3px solid currentColor;
+}
+.menuPlanIconCalendar::after{
+  content:"";
+  position:absolute;
+  left:2px;
+  top:-2px;
+  width:4px;
+  height:3px;
+  border-left:1.3px solid currentColor;
+  border-right:1.3px solid currentColor;
+}
+.menuPlanIconClock{
+  border:1.4px solid currentColor;
+  border-radius:50%;
+}
+.menuPlanIconClock::before{
+  content:"";
+  position:absolute;
+  left:4px;
+  top:2px;
+  width:1.3px;
+  height:3.4px;
+  background:currentColor;
+  transform-origin:bottom center;
+}
+.menuPlanIconClock::after{
+  content:"";
+  position:absolute;
+  left:4.4px;
+  top:5px;
+  width:3.2px;
+  height:1.3px;
+  background:currentColor;
+  transform:rotate(28deg);
+  transform-origin:left center;
+}
 .menuPlanRow em{
   display:block;
+  grid-column:1 / 2;
   font-size:9px;
   line-height:1.08;
   font-style:italic;
@@ -196,7 +275,7 @@ button{font:inherit}
   white-space:nowrap;
 }
 .menuCalendarButton{
-  grid-row:1 / span 2;
+  grid-row:1 / span 5;
   grid-column:2;
   align-self:center;
   border:1px solid #0a3156;
