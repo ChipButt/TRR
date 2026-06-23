@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "venue-ui-2026-06-23-v11";
+const APP_BUILD = "venue-ui-2026-06-23-v12";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -141,6 +141,12 @@ const VENUE_SOURCE_FRAME={x:0,y:(844-(390/BOOK_ASPECT))/2,w:390,h:390/BOOK_ASPEC
 const TAB_ORDER=["directory","piston-club","mr-watsons","gilks-garage","oily-rag","long-itch-diner","pats-baps","seven-mile","the-man-cave"];
 const MENU_LOGO_ASSET="assets/trr_logo_menu.png";
 const HOME_MENU_LOGO={type:"image",name:"Restoration Route Menu Logo",src:MENU_LOGO_ASSET,x:80,y:76,w:248,h:62,r:0,opacity:1,z:35,className:"menuLogoLayer"};
+const VENUE_PROFILE_STORE_KEY=STORE_KEY+".venueProfiles.v1";
+const VENUE_PROFILE_FIELDS=["name","summary","address","opening","food","notes","website","phone","email"];
+const VENUE_PROFILE_LIST_LIMITS={summary:4,address:3,opening:7,food:7,notes:3};
+const BASE_VENUES=DATA.venues.map(cloneVenue);
+let venueProfiles=loadLocalVenueProfiles(), venueProfileUnsubscribe=null, venueEditorAccess={master:LOCAL_TEST_MODE,venues:{}};
+applyVenueProfiles();
 
 function baseRepaired(){ const r={}; DATA.venues.forEach(v=>r[v.id]=false); return r; }
 function defaultState(){
@@ -154,6 +160,52 @@ function storageGet(key,fallback="{}"){
 }
 function storageSet(key,value){
   try{localStorage.setItem(key,value);return true}catch{return false}
+}
+function cloneVenue(v){
+  const out={...v};
+  ["summary","address","opening","food","notes"].forEach(k=>out[k]=Array.isArray(v[k])?[...v[k]]:String(v[k]||"").split(/\r?\n/).filter(Boolean));
+  return out;
+}
+function cleanText(value,max=220){return String(value||"").replace(/\s+/g," ").trim().slice(0,max);}
+function cleanLines(value,maxRows,maxChars=120){
+  const raw=Array.isArray(value)?value:String(value||"").split(/\r?\n/);
+  const out=raw.slice(0,maxRows).map(v=>cleanText(v,maxChars));
+  while(out.length<maxRows)out.push("");
+  return out;
+}
+function normalizeVenueProfile(profile={},base={}){
+  const out={};
+  if("name" in profile)out.name=cleanText(profile.name,80)||base.name||"";
+  ["summary","address","opening","food","notes"].forEach(k=>{
+    if(k in profile)out[k]=cleanLines(profile[k],VENUE_PROFILE_LIST_LIMITS[k]||3,k==="notes"?160:120);
+  });
+  ["website","phone","email"].forEach(k=>{if(k in profile)out[k]=cleanText(profile[k],k==="email"?120:100);});
+  return out;
+}
+function loadLocalVenueProfiles(){
+  try{return JSON.parse(storageGet(VENUE_PROFILE_STORE_KEY,"{}"))||{}}catch{return {}}
+}
+function saveLocalVenueProfiles(){storageSet(VENUE_PROFILE_STORE_KEY,JSON.stringify(venueProfiles));}
+function applyVenueProfiles(){
+  DATA.venues=BASE_VENUES.map(base=>{
+    const profile=normalizeVenueProfile(venueProfiles[base.id]||{},base);
+    return {...cloneVenue(base),...profile};
+  });
+}
+function venueProfileFromSnapshot(snap){
+  const out={};
+  snap.forEach(docSnap=>{
+    const id=docSnap.id;
+    if(venueById(id)||BASE_VENUES.some(v=>v.id===id))out[id]=normalizeVenueProfile(docSnap.data()||{},BASE_VENUES.find(v=>v.id===id)||{});
+  });
+  return out;
+}
+function refreshVenueViewsAfterProfileUpdate(){
+  const stage=overlayRoot.querySelector(".stage");
+  if(stage?.dataset.editorScreen==="venueEditor")return;
+  if(stage?.dataset.editorScreen==="venueTemplate"&&stage.dataset.editorVenue){openVenue(stage.dataset.editorVenue);return;}
+  if(stage?.dataset.editorScreen==="directory"){openDirectory();return;}
+  renderHome();
 }
 function loadLocal(){
   try{
@@ -216,6 +268,9 @@ async function initFirebase(){
       authStateResolved=true;
       currentUser=user;
       if(user){
+        await loadVenueEditorAccess(user);
+        await loadVenueProfilesOnce();
+        startVenueProfileSync();
         await loadCloud(user);
         closeAuthPanel();
         renderHome();
@@ -223,6 +278,8 @@ async function initFirebase(){
         if(previewMode())openPreviewFromUrl();
         else if(!layoutMode()&&(!state.username||!state.termsAccepted)) openAuthPanel("complete");
       }else{
+        stopVenueProfileSync();
+        venueEditorAccess={master:false,venues:{}};
         if(restoreRememberedSession())return;
         renderHome();
         setTimeout(setScales,80);
@@ -258,6 +315,61 @@ async function saveCloud(){
     currentVehicle:state.currentVehicle||1,routeCompleted:!!state.routeCompleted,hornBroken:!!state.hornBroken,hornBrokenCount:state.hornBrokenCount||0,hornRestoredCount:state.hornRestoredCount||0,updatedAt:fb.serverTimestamp()};
   await fb.setDoc(fb.doc(db,"userVisits",currentUser.uid),data,{merge:true});
   if(state.username) await fb.setDoc(fb.doc(db,"leaderboard",currentUser.uid),{uid:currentUser.uid,username:state.username,completedVehicles:state.completedVehicles||0,prizeEntries:state.prizeEntries||0,pendingPrizeEntries:state.pendingPrizeEntries||0,totalPartsRestored:state.totalPartsRestored||0,updatedAt:fb.serverTimestamp()},{merge:true}).catch(()=>{});
+}
+function canEditVenueProfile(id){return !!(LOCAL_TEST_MODE||venueEditorAccess.master||venueEditorAccess.venues?.[id]);}
+function editableVenueProfiles(){return routeVenues().filter(v=>canEditVenueProfile(v.id));}
+async function loadVenueEditorAccess(user){
+  venueEditorAccess={master:LOCAL_TEST_MODE,venues:{}};
+  if(LOCAL_TEST_MODE||!firebaseReady||!user||user.__local)return venueEditorAccess;
+  try{
+    const snap=await fb.getDoc(fb.doc(db,"venueEditors",user.uid));
+    if(snap.exists()){
+      const data=snap.data()||{};
+      venueEditorAccess={master:!!data.master,venues:{...(data.venues||{})}};
+    }
+  }catch(e){
+    console.warn("Venue editor access could not be loaded",e);
+  }
+  return venueEditorAccess;
+}
+async function loadVenueProfilesOnce(){
+  if(LOCAL_TEST_MODE){applyVenueProfiles();return;}
+  if(!firebaseReady||!fb||!db)return;
+  try{
+    const snap=await fb.getDocs(fb.collection(db,"venueProfiles"));
+    venueProfiles=venueProfileFromSnapshot(snap);
+    applyVenueProfiles();
+  }catch(e){
+    console.warn("Venue profiles could not be loaded",e);
+  }
+}
+function startVenueProfileSync(){
+  stopVenueProfileSync();
+  if(LOCAL_TEST_MODE||!firebaseReady||!fb?.onSnapshot||!db)return;
+  venueProfileUnsubscribe=fb.onSnapshot(fb.collection(db,"venueProfiles"),snap=>{
+    venueProfiles=venueProfileFromSnapshot(snap);
+    applyVenueProfiles();
+    refreshVenueViewsAfterProfileUpdate();
+  },e=>console.warn("Venue profile sync stopped",e));
+}
+function stopVenueProfileSync(){
+  if(venueProfileUnsubscribe){try{venueProfileUnsubscribe()}catch(e){}}
+  venueProfileUnsubscribe=null;
+}
+async function saveVenueProfile(id,profile){
+  if(!canEditVenueProfile(id))throw new Error("This account is not allowed to edit that venue.");
+  const base=BASE_VENUES.find(v=>v.id===id)||{};
+  const clean={venueId:id,...normalizeVenueProfile(profile,base)};
+  if(LOCAL_TEST_MODE||!firebaseReady||!currentUser||currentUser.__local){
+    venueProfiles={...venueProfiles,[id]:clean};
+    saveLocalVenueProfiles();
+    applyVenueProfiles();
+    return clean;
+  }
+  await fb.setDoc(fb.doc(db,"venueProfiles",id),{...clean,updatedAt:fb.serverTimestamp(),updatedBy:currentUser.uid,updatedByUsername:state.username||currentUser.displayName||""},{merge:true});
+  venueProfiles={...venueProfiles,[id]:clean};
+  applyVenueProfiles();
+  return clean;
 }
 
 function stableSrc(src,name=""){if(DATA.tabAssetOverrides&&DATA.tabAssetOverrides[src])return DATA.tabAssetOverrides[src];
@@ -568,7 +680,7 @@ function renderHome(){
 }
 function popupStage(cls="popupStage"){overlayRoot.innerHTML="";const sh=document.createElement("div");sh.className="popupShell";const st=makeStage(cls);st.dataset.editorScreen=cls.includes("repairStage")?"repair":cls.includes("menuStage")?"menu":cls.includes("pageStage")?"page":"popup";sh.appendChild(st);overlayRoot.appendChild(sh);if(editorMode())setTimeout(ensureLiveEditor,0);return st;}
 function closePopup(){overlayRoot.innerHTML="";}
-function openMenu(){const st=popupStage("menuStage");st.dataset.editorScreen="menu";const menuLayers=new Map();DATA.layout.menu.layers.forEach(l=>{if(l.type==="image")menuLayers.set(l,imgLayer(st,l))});let taps=0;const x=document.createElement("button");x.className="closeX";x.textContent="×";x.setAttribute("aria-label","Close Menu");x.onclick=closePopup;st.appendChild(x);hit(st,318,36,66,66,closePopup,"Close Menu");hit(st,38,50,314,98,closePopup,"Close Menu");hit(st,0,0,46,46,()=>{taps++;if(taps>=5)openAdmin();setTimeout(()=>taps=0,1800)},"Admin tap");DATA.layout.menu.layers.filter(l=>l.type==="image"&&!l.name.toLowerCase().includes("menu ui")).forEach(l=>{const n=l.name.toLowerCase(),layer=menuLayers.get(l);if(n.includes("profile"))hit(st,l.x,l.y,l.w,l.h,openProfile,"Profile",layer);else if(n.includes("leaderboard"))hit(st,l.x,l.y,l.w,l.h,openLeaderboard,"Leaderboard",layer);else if(n.includes("issues"))hit(st,l.x,l.y,l.w,l.h,openIssues,"Issues",layer);else if(n.includes("log out"))hit(st,l.x,l.y,l.w,l.h,openLogout,"Logout",layer);});}
+function openMenu(){const st=popupStage("menuStage");st.dataset.editorScreen="menu";const menuLayers=new Map();DATA.layout.menu.layers.forEach(l=>{if(l.type==="image")menuLayers.set(l,imgLayer(st,l))});let taps=0;const x=document.createElement("button");x.className="closeX";x.textContent="×";x.setAttribute("aria-label","Close Menu");x.onclick=closePopup;st.appendChild(x);hit(st,318,36,66,66,closePopup,"Close Menu");hit(st,38,50,314,98,closePopup,"Close Menu");hit(st,0,0,46,46,()=>{taps++;if(taps>=5)openAdmin();setTimeout(()=>taps=0,1800)},"Admin tap");DATA.layout.menu.layers.filter(l=>l.type==="image"&&!l.name.toLowerCase().includes("menu ui")).forEach(l=>{const n=l.name.toLowerCase(),layer=menuLayers.get(l);if(n.includes("profile"))hit(st,l.x,l.y,l.w,l.h,openProfile,"Profile",layer);else if(n.includes("leaderboard"))hit(st,l.x,l.y,l.w,l.h,openVenuePortal,"Venue Login",layer);else if(n.includes("issues"))hit(st,l.x,l.y,l.w,l.h,openIssues,"Issues",layer);else if(n.includes("log out"))hit(st,l.x,l.y,l.w,l.h,openLogout,"Logout",layer);});}
 function bookHome(st){const r=DATA.layout.directory.layers.find(l=>l.name.toLowerCase().includes("home button")); if(r){imgLayer(st,r,DATA.assets.homeButton);hit(st,r.x,r.y,r.w,r.h,closePopup,"Home");}}
 function tabLayerMap(){
   const layers=DATA.layout.directory.layers.filter(l=>l.type==="image"&&l.name.toLowerCase().includes("tab button"));
@@ -1094,7 +1206,81 @@ async function handleLogin(){try{const email=document.getElementById("authEmail"
 async function handleForgotLogin(){const email=(document.getElementById("recoverEmail")?.value||"").trim();if(!email)return openAuthPanel("forgot","Enter the email address used for this app.");try{storageSet("restorationRouteLastEmail",email);const url=location.origin&&location.pathname?location.origin+location.pathname:location.href.split(/[?#]/)[0];await fb.sendPasswordResetEmail(auth,email,{url,handleCodeInApp:false});openAuthPanel("login","Reset email sent. Open the email, set a new password, then sign in here with your email address.");}catch(e){openAuthPanel("forgot",friendlyAuthError(e,"Could not send the reset email."));}}
 function openProfile(msg=""){card(`<h2>Profile</h2>${msg?`<p>${esc(msg)}</p>`:""}<p>Email: ${esc(state.email||"")}</p><p>Username: ${esc(state.username||"")}</p><p>Email verified: ${state.emailVerified?"Yes":"No"}</p>${!state.emailVerified?'<button id="resendVerification">Resend Verification Email</button><button id="refreshVerification">I Verified It</button>':""}<button id="changeUsername">Change Username</button><button data-close>Close</button>`,()=>{const r=document.getElementById("resendVerification");if(r)r.onclick=()=>currentUser&&!currentUser.__local&&fb.sendEmailVerification(currentUser);const rf=document.getElementById("refreshVerification");if(rf)rf.onclick=async()=>{if(!currentUser||currentUser.__local)return;await fb.reload(currentUser);state.emailVerified=!!auth.currentUser.emailVerified;await saveCloud();closeCard();openProfile();};const cu=document.getElementById("changeUsername");if(cu)cu.onclick=()=>openUsernameEditor();});}
 function openUsernameEditor(){card(`<h2>Change Username</h2><p>Enter the public username you want shown on the leaderboard.</p><input id="newUsername" autocomplete="username" placeholder="Username" value="${esc(state.username||"")}"><button id="saveUsername">Save Username</button><button data-close>Cancel</button>`,()=>{document.getElementById("saveUsername").onclick=async()=>{const user=document.getElementById("newUsername").value.trim();const bad=badUsername(user);if(bad){closeCard();return card(`<h2>Username</h2><p>${esc(bad)}</p><button data-close>Close</button>`)}try{if(currentUser&&!currentUser.__local&&firebaseReady){await reserveUsername(user,currentUser.uid);await fb.updateProfile(currentUser,{displayName:user}).catch(()=>{});}state.username=user;state.termsAccepted=true;await saveCloud();closeCard();openProfile("Username updated.");}catch(e){closeCard();card(`<h2>Username</h2><p>${esc(friendlyAuthError(e,"Could not update that username."))}</p><button data-close>Close</button>`);}};});}
-function openLeaderboard(){card(`<h2>Vehicles Restored</h2><p>Completed vehicles: <strong>${state.completedVehicles}</strong></p><p>Prize entries: <strong>${state.prizeEntries}</strong></p><p>Pending entries until email verification: <strong>${state.pendingPrizeEntries}</strong></p><p>Total parts restored: <strong>${state.totalPartsRestored}</strong></p><button data-close>Close</button>`);}
+async function openVenuePortal(){
+  if(!requireLogin())return;
+  if(firebaseReady&&currentUser&&!currentUser.__local)await loadVenueEditorAccess(currentUser);
+  const venues=editableVenueProfiles();
+  const role=venueEditorAccess.master?"Master venue profile":venues.length?"Venue profile":"No venue access";
+  const uid=currentUser?.uid||state.uid||"";
+  const buttons=venues.map(v=>`<button class="venuePortalVenue" data-venue="${esc(v.id)}">${esc(v.name)}</button>`).join("");
+  card(`<h2>Venue Login</h2><p>${esc(role)}</p>${venues.length?`<p>Select a venue to update the information shown to all app users.</p><div class="venuePortalList">${buttons}</div>`:`<p>This account is not linked to a venue editor role yet. Sign in with a venue account, or ask the master profile to add this UID in Firestore.</p><p class="authHint">UID: ${esc(uid||"not signed in")}</p>`}<button id="refreshVenueAccess">Refresh Access</button><button data-close>Close</button>`,()=>{
+    document.querySelectorAll(".venuePortalVenue").forEach(b=>b.onclick=()=>openVenueEditor(b.dataset.venue));
+    const refresh=document.getElementById("refreshVenueAccess");
+    if(refresh)refresh.onclick=async()=>{closeCard();await openVenuePortal();};
+  });
+}
+function openLeaderboard(){openVenuePortal();}
+function venueEditorControl(st,{field,type="input",x,y,w,h,value="",label="",rows=2}){
+  const el=document.createElement(type==="textarea"?"textarea":"input");
+  el.className="venueEditorField"+(type==="textarea"?" venueEditorTextarea":"");
+  el.dataset.field=field;
+  if(label)el.setAttribute("aria-label",label);
+  if(type==="textarea")el.rows=rows;
+  else el.type="text";
+  el.value=Array.isArray(value)?value.join("\n"):String(value||"");
+  Object.assign(el.style,{left:x+"px",top:y+"px",width:w+"px",height:h+"px"});
+  st.appendChild(el);
+  return el;
+}
+function collectVenueEditorProfile(st){
+  const value=f=>st.querySelector(`[data-field="${f}"]`)?.value||"";
+  const rows=(f,max)=>cleanLines(value(f),max,140);
+  return {
+    name:cleanText(value("name"),80),
+    summary:rows("summary",4),
+    address:rows("address",3),
+    opening:rows("opening",7),
+    food:rows("food",7),
+    notes:rows("notes",3),
+    website:cleanText(value("website"),100),
+    phone:cleanText(value("phone"),100),
+    email:cleanText(value("email"),120)
+  };
+}
+function openVenueEditor(id,msg=""){
+  if(!canEditVenueProfile(id)){card(`<h2>Venue Login</h2><p>This account cannot edit that venue.</p><button data-close>Close</button>`);return;}
+  const v=venueById(id);if(!v)return;
+  closeCard();
+  const st=popupStage("venueEditorStage");st.dataset.editorScreen="venueEditor";st.dataset.editorVenue=id;
+  const bg={...BOOK_ART_FRAME,r:0,opacity:1,z:0,name:"Venue UI"};
+  imgLayer(st,bg,DATA.assets.venue1);
+  const img=mapVenueLayer(DATA.layout.venueTemplate.layers.find(l=>l.type==="image"&&l.name.toLowerCase().includes("exhaust broken"))||{x:41,y:337,w:121,h:97,r:0,opacity:1,z:3});
+  imgLayer(st,img,state.repaired[v.id]?DATA.components[v.key].fixed:DATA.components[v.key].broken);
+  venueEditorControl(st,{field:"name",label:"Venue Name",x:49,y:260,w:177,h:45,value:v.name});
+  venueEditorControl(st,{field:"summary",type:"textarea",label:"Summary",x:184,y:324,w:139,h:57,value:v.summary,rows:4});
+  venueEditorControl(st,{field:"address",type:"textarea",label:"Address",x:184,y:390,w:139,h:53,value:v.address,rows:3});
+  venueEditorControl(st,{field:"opening",type:"textarea",label:"Opening Hours",x:92,y:459,w:78,h:84,value:v.opening,rows:7});
+  venueEditorControl(st,{field:"food",type:"textarea",label:"Food Hours",x:230,y:459,w:94,h:84,value:v.food,rows:7});
+  venueEditorControl(st,{field:"notes",type:"textarea",label:"Notes",x:39,y:548,w:287,h:42,value:v.notes,rows:3});
+  venueEditorControl(st,{field:"website",label:"Website",x:73,y:591,w:252,h:15,value:v.website});
+  venueEditorControl(st,{field:"phone",label:"Phone",x:73,y:612,w:252,h:15,value:v.phone});
+  venueEditorControl(st,{field:"email",label:"Email",x:73,y:633,w:252,h:15,value:v.email});
+  const actions=document.createElement("div");
+  actions.className="venueEditorActions";
+  actions.innerHTML=`${msg?`<span>${esc(msg)}</span>`:""}<button type="button" data-save>Save For All Users</button><button type="button" data-preview>Preview</button><button type="button" data-close-editor>Close</button>`;
+  st.appendChild(actions);
+  actions.querySelector("[data-save]").onclick=async()=>{
+    try{
+      await saveVenueProfile(id,collectVenueEditorProfile(st));
+      openVenueEditor(id,"Saved.");
+    }catch(e){
+      actions.querySelector("span")?.remove();
+      actions.insertAdjacentHTML("afterbegin",`<span>${esc(friendlyAuthError(e,"Could not save venue profile."))}</span>`);
+    }
+  };
+  actions.querySelector("[data-preview]").onclick=()=>{applyVenueProfiles();openVenue(id);};
+  actions.querySelector("[data-close-editor]").onclick=openVenuePortal;
+}
 function openIssues(){location.href=`mailto:${DATA.terms.contactEmail}?subject=The%20Restoration%20Route%20Issue&body=${encodeURIComponent("User: "+(state.username||"")+"\nEmail: "+(state.email||"")+"\n\nIssue:\n")}`;}
 function openLogout(){card(`<h2>Log Out</h2><p>Progress is saved to your account if online sync has completed.</p><button id="logoutConfirm">Log Out</button><button data-close>Cancel</button>`,()=>{document.getElementById("logoutConfirm").onclick=async()=>{try{if(auth&&fb?.signOut)await fb.signOut(auth)}catch(e){} currentUser=null; state=defaultState(); try{localStorage.removeItem(STORE_KEY);localStorage.removeItem("restorationRouteLastEmail")}catch(e){} closeCard(); renderHome(); openAuthPanel("register")}});}
 function openAdmin(){card(`<h2>Garage Admin</h2><input id="adminCode" placeholder="Code"><button id="adminUnlock">Unlock</button><button data-close>Close</button>`,()=>{document.getElementById("adminUnlock").onclick=()=>{if(document.getElementById("adminCode").value!==ADMIN_CODE)return;closeCard();card(`<h2>Chip’s Big Red Button</h2><button id="repairAll">Repair All Components</button><button id="completeVehicle">Complete Vehicle</button><button id="resetVehicle">Reset Current Vehicle</button><button data-close>Close</button>`,()=>{document.getElementById("repairAll").onclick=async()=>{DATA.venues.forEach(v=>state.repaired[v.id]=true);state.routeCompleted=true;await saveCloud();closeCard();renderHome();openVehicleCompletionRestoration()};document.getElementById("completeVehicle").onclick=async()=>{await completeVehicle("admin_complete");closeCard();renderHome()};document.getElementById("resetVehicle").onclick=async()=>{state.repaired=baseRepaired();state.hornBroken=false;state.routeCompleted=false;storageSet(COMPLETION_NOTICE_KEY,"");await saveCloud();closeCard();renderHome()};})}});}

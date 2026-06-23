@@ -3,6 +3,52 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    function validVenueId(venueId) {
+      return venueId in [
+        'piston-club',
+        'mr-watsons',
+        'gilks-garage',
+        'oily-rag',
+        'long-itch-diner',
+        'pats-baps',
+        'seven-mile',
+        'the-man-cave'
+      ];
+    }
+    function hasVenueEditorDoc() {
+      return signedIn() && exists(/databases/$(database)/documents/venueEditors/$(request.auth.uid));
+    }
+    function isMasterVenueEditor() {
+      return hasVenueEditorDoc()
+        && get(/databases/$(database)/documents/venueEditors/$(request.auth.uid)).data.master == true;
+    }
+    function canEditVenue(venueId) {
+      return validVenueId(venueId) && (
+        isMasterVenueEditor()
+        || (
+          hasVenueEditorDoc()
+          && get(/databases/$(database)/documents/venueEditors/$(request.auth.uid)).data.venues[venueId] == true
+        )
+      );
+    }
+    function validVenueProfileWrite(venueId) {
+      return request.resource.data.venueId == venueId
+        && request.resource.data.keys().hasOnly([
+          'venueId',
+          'name',
+          'summary',
+          'address',
+          'opening',
+          'food',
+          'notes',
+          'website',
+          'phone',
+          'email',
+          'updatedAt',
+          'updatedBy',
+          'updatedByUsername'
+        ]);
+    }
 
     match /userVisits/{userId} {
       allow read, create, update: if isOwner(userId);
@@ -23,20 +69,22 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /venueEditors/{userId} {
+      allow read: if isOwner(userId) || isMasterVenueEditor();
+      allow create, update, delete: if isMasterVenueEditor();
+    }
+
+    match /venueProfiles/{venueId} {
+      allow read: if signedIn();
+      allow create, update: if canEditVenue(venueId) && validVenueProfileWrite(venueId);
+      allow delete: if false;
+    }
+
     match /scanEvents/{eventId} {
       allow read: if signedIn() && resource.data.uid == request.auth.uid;
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.venueId in [
-          'piston-club',
-          'mr-watsons',
-          'gilks-garage',
-          'oily-rag',
-          'long-itch-diner',
-          'pats-baps',
-          'seven-mile',
-          'the-man-cave'
-        ];
+        && validVenueId(request.resource.data.venueId);
       allow update, delete: if false;
     }
 

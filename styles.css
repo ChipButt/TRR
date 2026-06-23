@@ -15,6 +15,57 @@ button{font:inherit}
 .layer img{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none}
 .textLayer{position:absolute;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.02;font-weight:800;color:#0a3156;white-space:pre-wrap;overflow:hidden;text-transform:none}
 .directoryDirectionsText{text-decoration:underline;text-underline-offset:1px;cursor:pointer}
+.venueEditorField{
+  position:absolute;
+  z-index:620;
+  border:1px dashed rgba(10,49,86,.72);
+  border-radius:3px;
+  background:rgba(255,248,223,.82);
+  color:#0a3156;
+  padding:2px 3px;
+  font-family:Georgia,'Times New Roman',serif;
+  font-size:6.8px;
+  font-weight:800;
+  line-height:1.05;
+  resize:none;
+  outline:none;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.45);
+}
+.venueEditorTextarea{overflow:auto;white-space:pre-wrap}
+.venueEditorField:focus{border-color:#bb2b25;background:rgba(255,250,225,.96);box-shadow:0 0 0 2px rgba(187,43,37,.2)}
+.venueEditorActions{
+  position:absolute;
+  left:28px;
+  top:655px;
+  width:332px;
+  z-index:760;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  flex-wrap:wrap;
+  pointer-events:auto;
+}
+.venueEditorActions span{
+  width:100%;
+  color:#0a3156;
+  font-size:10px;
+  font-weight:800;
+  text-align:center;
+  text-shadow:0 1px 0 rgba(255,248,223,.8);
+}
+.venueEditorActions button{
+  border:1px solid #0a3156;
+  background:#0a3156;
+  color:#f6e6bd;
+  border-radius:8px;
+  padding:7px 9px;
+  font-size:11px;
+  font-weight:900;
+  cursor:pointer;
+}
+.venuePortalList{display:grid;grid-template-columns:1fr;gap:6px;margin:10px 0}
+.venuePortalList button{width:100%;text-align:left}
 .textLayer.layoutGuide{pointer-events:auto;cursor:pointer;outline:1px dashed rgba(187,43,37,.9);background:rgba(255,244,168,.16)}
 .textLayer.layoutGuide:hover{outline:2px solid rgba(187,43,37,.95);background:rgba(255,244,168,.32)}
 .textLayer.layoutGuide.isSelected{outline:2px solid #0a3156;background:rgba(246,223,170,.52);box-shadow:0 0 0 2px rgba(255,248,223,.75)}
