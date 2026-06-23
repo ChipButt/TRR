@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "venue-ui-2026-06-23-v20";
+const APP_BUILD = "venue-ui-2026-06-23-v21";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -838,7 +838,7 @@ function drawMenuButtonLabel(st,l,text){
 function drawMenuSocialSummary(st){
   const d=document.createElement("div");
   d.className="menuSocialPanel";
-  Object.assign(d.style,{left:"28px",top:"500px",width:"334px",height:"294px"});
+  Object.assign(d.style,{left:"28px",top:"498px",width:"334px",height:"322px"});
   d.innerHTML=menuSocialSummaryMarkup({meetups:[]},true);
   st.appendChild(d);
   bindMenuSocialActions(d);
