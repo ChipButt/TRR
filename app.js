@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "venue-ui-2026-06-23-v14";
+const APP_BUILD = "venue-ui-2026-06-23-v15";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -1358,7 +1358,8 @@ async function updateMeetupStatus(planId,status){
 async function openInviteFriends(msg=""){
   if(typeof msg!=="string")msg="";
   if(!requireLogin())return;
-  const d=card(`<h2>Invite Friends</h2>${msg?`<p class="authError">${esc(msg)}</p>`:""}<p class="authHint">Search for an app user by their exact username, link them as a friend, then suggest a time and venue to meet.</p><div id="inviteFriendsBody"><p>Loading friends...</p></div><button data-close>Close</button>`);
+  const d=card(`<h2>Invite Friends</h2>${msg?`<p class="authError">${esc(msg)}</p>`:""}<div id="inviteFriendsBody"><p>Loading friends...</p></div><button data-close>Close</button>`);
+  d.classList.add("inviteFriendsCard");
   try{
     const data=await loadSocialData();
     const friends=data.friends||[],meetups=data.meetups||[];
