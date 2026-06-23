@@ -103,6 +103,7 @@ service cloud.firestore {
         'suggestedTime',
         'note',
         'status',
+        'responses',
         'createdAt',
         'updatedAt'
       ]);

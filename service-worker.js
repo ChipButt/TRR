@@ -1,4 +1,4 @@
-const APP_BUILD = "venue-ui-2026-06-23-v18";
+const APP_BUILD = "venue-ui-2026-06-23-v19";
 const CACHE = "restoration-route-public-static-" + APP_BUILD;
 const ASSETS = [
   'index.html',
@@ -11,6 +11,7 @@ const ASSETS = [
   'assets/8_venue_assets_garage_directory_ui.webp',
   'assets/8_venue_assets_venue_1_ui.jpg',
   'assets/trr_logo_menu.png',
+  'assets/cog_loader.png',
   'assets/Repair Transition Animation.webm',
   'assets/banter_box.webp',
   'assets/component_assets_exhaust_broken.png',
@@ -52,6 +53,8 @@ const ASSETS = [
   'assets/menu_buttons_restoration_route_button_log_out_true_alpha.webp',
   'assets/menu_buttons_restoration_route_button_profile_true_alpha.webp',
   'assets/menu_ui.webp',
+  'assets/restoration_route_invite_friends_keyed.png',
+  'assets/restoration_route_set_up_meet_keyed.png',
   'assets/repair_ui_background_v78.png',
   'assets/scanner_home_button.png',
   'assets/scanner_ui.webp',

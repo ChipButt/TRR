@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "venue-ui-2026-06-23-v18";
+const APP_BUILD = "venue-ui-2026-06-23-v19";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -55,6 +55,7 @@ DATA.components.vehicle = DATA.components.vehicle || {broken:"assets/vehicle_bro
 const homeRoot = document.getElementById("homeRoot");
 const overlayRoot = document.getElementById("overlayRoot");
 const scannerRoot = document.getElementById("scannerRoot");
+const loadingRoot = document.getElementById("loadingRoot");
 const STORE_KEY = "restorationRoute8VenueState.finished.v1";
 const LAYOUT_STORE_KEY = STORE_KEY+".layoutDraft.v70";
 const COMPLETION_NOTICE_KEY = STORE_KEY+".completionNotice.v70";
@@ -141,7 +142,10 @@ const BOOK_ART_FRAME={x:-32+(452-(493*BOOK_ASPECT))/2,y:183,w:493*BOOK_ASPECT,h:
 const VENUE_SOURCE_FRAME={x:0,y:(844-(390/BOOK_ASPECT))/2,w:390,h:390/BOOK_ASPECT};
 const TAB_ORDER=["directory","piston-club","mr-watsons","gilks-garage","oily-rag","long-itch-diner","pats-baps","seven-mile","the-man-cave"];
 const MENU_LOGO_ASSET="assets/trr_logo_menu.png";
-const HOME_MENU_LOGO={type:"image",name:"Restoration Route Menu Logo",src:MENU_LOGO_ASSET,x:80,y:76,w:248,h:62,r:0,opacity:1,z:35,className:"menuLogoLayer"};
+const MENU_SET_UP_MEET_ASSET="assets/restoration_route_set_up_meet_keyed.png";
+const MENU_INVITE_FRIENDS_ASSET="assets/restoration_route_invite_friends_keyed.png";
+const LOADING_COG_ASSET="assets/cog_loader.png";
+const HOME_MENU_LOGO={type:"image",name:"Restoration Route Menu Logo",src:MENU_LOGO_ASSET,x:92,y:76,w:219,h:61,r:0,opacity:1,z:35,className:"menuLogoLayer"};
 const VENUE_PROFILE_STORE_KEY=STORE_KEY+".venueProfiles.v1";
 const SOCIAL_STORE_KEY=STORE_KEY+".social.v1";
 const LOCAL_TEST_SOCIAL_USERS=[
@@ -149,6 +153,9 @@ const LOCAL_TEST_SOCIAL_USERS=[
   {uid:"local-friend-scalemate",username:"ScaleMate",completedVehicles:1,totalPartsRestored:8},
   {uid:"local-friend-roadcrew",username:"RoadCrew",completedVehicles:3,totalPartsRestored:21},
   {uid:"local-friend-spannerpal",username:"SpannerPal",completedVehicles:0,totalPartsRestored:5}
+];
+const LOCAL_TEST_FRIEND_REQUESTS=[
+  {id:"local-request-roadcrew",uid:"local-friend-roadcrew",username:"RoadCrew",completedVehicles:3,totalPartsRestored:21,requesterUid:"local-friend-roadcrew",requesterUsername:"RoadCrew",targetUid:"local-test-user",status:"pending"}
 ];
 const VENUE_PROFILE_FIELDS=["name","summary","address","opening","food","notes","website","phone","email"];
 const VENUE_PROFILE_LIST_LIMITS={summary:4,address:3,opening:7,food:7,notes:3};
@@ -198,14 +205,23 @@ function saveLocalVenueProfiles(){storageSet(VENUE_PROFILE_STORE_KEY,JSON.string
 function normalizeLocalSocial(data={}){
   const byUid=new Map(LOCAL_TEST_SOCIAL_USERS.map(u=>[u.uid,u]));
   const friends=(data.friends||[]).filter(f=>byUid.has(f.uid)).map(f=>({...f,...byUid.get(f.uid),username:byUid.get(f.uid).username}));
+  const sourceRequests=Array.isArray(data.friendRequests)?data.friendRequests:LOCAL_TEST_FRIEND_REQUESTS;
+  const friendRequests=sourceRequests.filter(r=>byUid.has(r.uid||r.requesterUid)).map(r=>{
+    const uid=r.uid||r.requesterUid,base=byUid.get(uid);
+    return {...r,uid,username:base.username,completedVehicles:base.completedVehicles,totalPartsRestored:base.totalPartsRestored,status:r.status||"pending"};
+  }).filter(r=>!friends.some(f=>f.uid===r.uid));
+  const sentFriendRequests=(data.sentFriendRequests||[]).filter(r=>byUid.has(r.uid||r.targetUid)).map(r=>{
+    const uid=r.uid||r.targetUid,base=byUid.get(uid);
+    return {...r,uid,username:base.username,status:r.status||"pending"};
+  }).filter(r=>!friends.some(f=>f.uid===r.uid));
   const meetups=(data.meetups||[]).filter(p=>{
     const ids=Array.isArray(p.friendUids)?p.friendUids:(p.friendUid?[p.friendUid]:[]);
     return ids.length&&ids.every(id=>byUid.has(id));
   });
-  return {friends,meetups};
+  return {friends,meetups,friendRequests,sentFriendRequests};
 }
 function loadLocalSocial(){
-  try{return normalizeLocalSocial({...{friends:[],meetups:[]},...JSON.parse(storageGet(SOCIAL_STORE_KEY,"{}"))})}catch{return {friends:[],meetups:[]}}
+  try{return normalizeLocalSocial({...{friends:[],meetups:[],friendRequests:LOCAL_TEST_FRIEND_REQUESTS,sentFriendRequests:[]},...JSON.parse(storageGet(SOCIAL_STORE_KEY,"{}"))})}catch{return normalizeLocalSocial({friends:[],meetups:[]})}
 }
 function saveLocalSocial(){storageSet(SOCIAL_STORE_KEY,JSON.stringify(socialCache));}
 function applyVenueProfiles(){
@@ -459,7 +475,8 @@ function stableSrc(src,name=""){if(DATA.tabAssetOverrides&&DATA.tabAssetOverride
     "assets/component_assets_gearbox_broken.webp":DATA.components.gearbox.broken,"assets/component_assets_gearbox_fixed.png":DATA.components.gearbox.fixed,
     "assets/garage_directory_assets_home_button.webp":DATA.assets.homeButton,"assets/garage_directory_assets_repaired_stamp.webp":DATA.assets.repairStamp,
     "assets/menu_buttons_restoration_route_button_issues_true_alpha.webp":DATA.assets.menuButtons?.issues,"assets/menu_buttons_restoration_route_button_profile_true_alpha.webp":DATA.assets.menuButtons?.profile,
-    "assets/menu_buttons_restoration_route_button_leaderboard_true_alpha.webp":DATA.assets.menuButtons?.leaderboard,"assets/menu_buttons_restoration_route_button_log_out_true_alpha.webp":DATA.assets.menuButtons?.logout
+    "assets/menu_buttons_restoration_route_button_leaderboard_true_alpha.webp":DATA.assets.menuButtons?.leaderboard,"assets/menu_buttons_restoration_route_button_log_out_true_alpha.webp":DATA.assets.menuButtons?.logout,
+    [MENU_SET_UP_MEET_ASSET]:MENU_SET_UP_MEET_ASSET,[MENU_INVITE_FRIENDS_ASSET]:MENU_INVITE_FRIENDS_ASSET,[LOADING_COG_ASSET]:LOADING_COG_ASSET
   };
   return map[src]||src;
 }
@@ -506,6 +523,49 @@ function setScales(){
 addEventListener("resize",setScales);
 if(window.visualViewport)window.visualViewport.addEventListener("resize",()=>setTimeout(setScales,60));
 document.addEventListener("focusout",()=>setTimeout(setScales,250),true);
+let loadingToken=0, loadingFadeTimer=null;
+function showLoadingScreen(label="Loading ..."){
+  if(!loadingRoot)return 0;
+  const token=++loadingToken;
+  clearTimeout(loadingFadeTimer);
+  const text=loadingRoot.querySelector("[data-loading-text]");
+  if(text)text.textContent=label;
+  loadingRoot.classList.remove("isHidden");
+  loadingRoot.setAttribute("aria-busy","true");
+  return token;
+}
+function hideLoadingScreen(token=0){
+  if(!loadingRoot)return;
+  if(token&&token!==loadingToken)return;
+  loadingRoot.setAttribute("aria-busy","false");
+  loadingRoot.classList.add("isHidden");
+}
+function nextFrame(){return new Promise(resolve=>requestAnimationFrame(()=>resolve()));}
+function preloadImageAsset(src){
+  if(!src)return Promise.resolve();
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.decoding="async";
+    img.onload=()=>{if(img.decode)img.decode().catch(()=>{}).then(resolve);else resolve();};
+    img.onerror=resolve;
+    img.src=src;
+  });
+}
+function stageImagePromises(root){
+  return [...(root||document).querySelectorAll("img")].map(img=>{
+    if(img.complete&&img.naturalWidth)return img.decode?img.decode().catch(()=>{}):Promise.resolve();
+    return new Promise(resolve=>{img.addEventListener("load",resolve,{once:true});img.addEventListener("error",resolve,{once:true});});
+  });
+}
+async function revealWhenReady(token,root){
+  await Promise.all(stageImagePromises(root));
+  await nextFrame();
+  await nextFrame();
+  hideLoadingScreen(token);
+}
+async function preloadAssets(srcs=[]){
+  await Promise.all([...new Set(srcs.filter(Boolean))].map(preloadImageAsset));
+}
 function makeStage(c){const s=document.createElement("div");s.className="stage "+c;return s;}
 function layoutMode(){return false;}
 function editorMode(){return false;}
@@ -735,14 +795,21 @@ function renderHome(){
     if(n.includes("horn"))hornHit(st,l.x,l.y,l.w,l.h,layer);
   });
   const logoLayer=imgLayer(st,HOME_MENU_LOGO,MENU_LOGO_ASSET);
-  hit(st,80,66,248,84,()=>{if(requireLogin())openMenu()},"Menu",logoLayer);
+  hit(st,HOME_MENU_LOGO.x,HOME_MENU_LOGO.y,HOME_MENU_LOGO.w,HOME_MENU_LOGO.h+10,()=>{if(requireLogin())openMenu()},"Menu",logoLayer);
   homeRoot.appendChild(st);
   if(editorMode())setTimeout(ensureLiveEditor,0);
   setTimeout(maybeShowRouteComplete,80);
+  if(loadingRoot&&!loadingRoot.classList.contains("isHidden"))revealWhenReady(loadingToken,st);
 }
 function popupStage(cls="popupStage"){overlayRoot.innerHTML="";const sh=document.createElement("div");sh.className="popupShell";const st=makeStage(cls);st.dataset.editorScreen=cls.includes("repairStage")?"repair":cls.includes("menuStage")?"menu":cls.includes("pageStage")?"page":"popup";sh.appendChild(st);overlayRoot.appendChild(sh);if(editorMode())setTimeout(ensureLiveEditor,0);return st;}
 function closePopup(){overlayRoot.innerHTML="";}
-function openMenu(){const st=popupStage("menuStage");st.dataset.editorScreen="menu";const menuLayers=new Map();DATA.layout.menu.layers.forEach(l=>{if(l.type==="image")menuLayers.set(l,imgLayer(st,l))});let taps=0;const x=document.createElement("button");x.className="closeX";x.textContent="×";x.setAttribute("aria-label","Close Menu");x.onclick=closePopup;st.appendChild(x);hit(st,318,36,66,66,closePopup,"Close Menu");hit(st,38,50,314,98,closePopup,"Close Menu");hit(st,0,0,46,46,()=>{taps++;if(taps>=5)openAdmin();setTimeout(()=>taps=0,1800)},"Admin tap");DATA.layout.menu.layers.filter(l=>l.type==="image"&&!l.name.toLowerCase().includes("menu ui")).forEach(l=>{const n=l.name.toLowerCase(),layer=menuLayers.get(l);if(n.includes("profile"))hit(st,l.x,l.y,l.w,l.h,openProfile,"Profile",layer);else if(n.includes("leaderboard")){drawMenuButtonLabel(st,l,"SUGGEST MEET-UP");hit(st,l.x,l.y,l.w,l.h,()=>openSuggestMeetup(),"Suggest Meet-Up",layer);}else if(n.includes("issues"))hit(st,l.x,l.y,l.w,l.h,openIssues,"Issues",layer);else if(n.includes("log out")){drawMenuButtonLabel(st,l,"INVITE FRIENDS");hit(st,l.x,l.y,l.w,l.h,()=>openInviteFriends(),"Invite Friends",layer);}});drawMenuSocialSummary(st);}
+function menuButtonAsset(l){
+  const n=(l.name||"").toLowerCase();
+  if(n.includes("leaderboard"))return MENU_SET_UP_MEET_ASSET;
+  if(n.includes("log out"))return MENU_INVITE_FRIENDS_ASSET;
+  return stableSrc(l.src,l.name);
+}
+function openMenu(){const st=popupStage("menuStage");st.dataset.editorScreen="menu";const menuLayers=new Map();DATA.layout.menu.layers.forEach(l=>{if(l.type==="image")menuLayers.set(l,imgLayer(st,l,menuButtonAsset(l)))});let taps=0;const x=document.createElement("button");x.className="closeX";x.textContent="×";x.setAttribute("aria-label","Close Menu");x.onclick=closePopup;st.appendChild(x);hit(st,318,36,66,66,closePopup,"Close Menu");hit(st,38,50,314,98,closePopup,"Close Menu");hit(st,0,0,46,46,()=>{taps++;if(taps>=5)openAdmin();setTimeout(()=>taps=0,1800)},"Admin tap");DATA.layout.menu.layers.filter(l=>l.type==="image"&&!l.name.toLowerCase().includes("menu ui")).forEach(l=>{const n=l.name.toLowerCase(),layer=menuLayers.get(l);if(n.includes("profile"))hit(st,l.x,l.y,l.w,l.h,openProfile,"Profile",layer);else if(n.includes("leaderboard"))hit(st,l.x,l.y,l.w,l.h,()=>openSuggestMeetup(),"Suggest Meet-Up",layer);else if(n.includes("issues"))hit(st,l.x,l.y,l.w,l.h,openIssues,"Issues",layer);else if(n.includes("log out"))hit(st,l.x,l.y,l.w,l.h,()=>openInviteFriends(),"Invite Friends",layer);});drawMenuSocialSummary(st);}
 function drawMenuButtonLabel(st,l,text){
   const d=document.createElement("div");
   d.className="menuInviteLabel layer";
@@ -753,20 +820,27 @@ function drawMenuButtonLabel(st,l,text){
 function drawMenuSocialSummary(st){
   const d=document.createElement("div");
   d.className="menuSocialPanel";
-  Object.assign(d.style,{left:"28px",top:"505px",width:"334px",height:"294px"});
-  d.innerHTML=menuSocialSummaryMarkup({friends:[],meetups:[]},true);
+  Object.assign(d.style,{left:"30px",top:"520px",width:"330px",height:"246px"});
+  d.innerHTML=menuSocialSummaryMarkup({meetups:[]},true);
   st.appendChild(d);
+  bindMenuSocialActions(d);
   refreshMenuSocialSummary(d);
 }
 function refreshMenuSocialSummary(panel=overlayRoot.querySelector(".menuSocialPanel")){
   if(!panel)return;
-  loadSocialData().then(data=>{if(panel.isConnected)panel.innerHTML=menuSocialSummaryMarkup(data,false);}).catch(()=>{if(panel.isConnected)panel.innerHTML=menuSocialSummaryMarkup({friends:[],meetups:[]},false);});
+  loadSocialData().then(data=>{if(panel.isConnected){panel.innerHTML=menuSocialSummaryMarkup(data,false);bindMenuSocialActions(panel);}}).catch(()=>{if(panel.isConnected){panel.innerHTML=menuSocialSummaryMarkup({meetups:[]},false);bindMenuSocialActions(panel);}});
+}
+function bindMenuSocialActions(panel){
+  panel.querySelectorAll("[data-calendar-plan]").forEach(b=>b.onclick=async e=>{e.stopPropagation();try{await addPlanToCalendar(b.dataset.calendarPlan);}catch(err){}});
 }
 function menuSocialSummaryMarkup(data,loading=false){
-  const friends=(data.friends||[]).slice(0,4),plans=(data.meetups||[]).slice(0,3);
-  const friendRows=friends.map(f=>`<div><strong>${esc(f.username||"Friend")}</strong><span>${Number(f.completedVehicles||0)} vehicles / ${Number(f.totalPartsRestored||0)} parts</span></div>`).join("");
-  const planRows=plans.map(p=>`<div><strong>${esc(p.venueName||"Meet-up")}</strong><span>${esc(planDateText(p))} · ${esc(p.status||"suggested")}</span></div>`).join("");
-  return `<h3>Friends & Meet-ups</h3>${loading?`<p>Loading...</p>`:friendRows||`<p>No friends linked yet.</p>`}${planRows?`<h4>Plans</h4>${planRows}`:""}`;
+  const plans=visibleMeetupPlans(data.meetups||[]).slice(0,3);
+  const planRows=plans.map(p=>{
+    const response=currentPlanResponse(p);
+    const calendar=response==="confirmed"?`<button class="menuCalendarButton" type="button" data-calendar-plan="${esc(p.id)}">Calendar</button>`:"";
+    return `<div class="menuPlanRow"><strong>${esc(p.venueName||"Meet-up")}</strong><span>${esc(planDateText(p))} · ${esc(planPeopleText(p))} · ${esc(planStatusText(p))}</span>${calendar}</div>`;
+  }).join("");
+  return `<h3>Upcoming Plans</h3>${loading?`<p>Loading...</p>`:(planRows||`<p>No confirmed or upcoming plans yet.</p>`)}`;
 }
 function bookHome(st){const r=DATA.layout.directory.layers.find(l=>l.name.toLowerCase().includes("home button")); if(r){imgLayer(st,r,DATA.assets.homeButton);hit(st,r.x,r.y,r.w,r.h,closePopup,"Home");}}
 function tabLayerMap(){
@@ -796,7 +870,22 @@ function tabs(st,current="directory"){
     hit(st,l.x-4,l.y-2,Math.max(l.w+10,34),Math.max(l.h+6,54),()=>id==="directory"?openDirectory():openVenue(id),id);
   });
 }
-function openDirectory(){const st=popupStage();st.dataset.editorScreen="directory";const bg=DATA.layout.directory.layers.find(l=>l.name.toLowerCase().includes("garage directory ui"))||DATA.layout.directory.layers[0];imgLayer(st,bg,DATA.assets.directory);drawDirectory(st);tabs(st,"directory");bookHome(st);}
+function tabAssetList(current="directory"){
+  const layers=tabLayerMap();
+  const visibleTabs=current==="directory"?TAB_ORDER:TAB_ORDER.filter(id=>id!=="directory");
+  return visibleTabs.map(id=>layers[id]&&stableSrc(layers[id].src,layers[id].name)).filter(Boolean);
+}
+function directoryPageAssets(){
+  return [DATA.assets.directory,DATA.assets.homeButton,...tabAssetList("directory"),...routeVenues().map(v=>DATA.components[v.key]?.fixed)].filter(Boolean);
+}
+function venuePageAssets(v){
+  return [DATA.assets.venue1,DATA.assets.homeButton,...tabAssetList(v.id),state.repaired[v.id]?DATA.components[v.key]?.fixed:DATA.components[v.key]?.broken,state.repaired[v.id]?DATA.assets.repairStamp:""].filter(Boolean);
+}
+async function openDirectory(){
+  const token=showLoadingScreen();
+  await preloadAssets(directoryPageAssets());
+  const st=popupStage();st.dataset.editorScreen="directory";const bg=DATA.layout.directory.layers.find(l=>l.name.toLowerCase().includes("garage directory ui"))||DATA.layout.directory.layers[0];imgLayer(st,bg,DATA.assets.directory);drawDirectory(st);tabs(st,"directory");bookHome(st);revealWhenReady(token,st);
+}
 function drawDirectory(st){
   const txt=DATA.layout.directory.layers.filter(l=>l.type==="text"),
     names=txt.filter(l=>l.x>=50&&l.x<=60&&l.fontSize===28).sort((a,b)=>a.y-b.y).slice(0,8),
@@ -823,7 +912,12 @@ function shortName(n){return n.replace("The Piston Club","PISTON\nCLUB").replace
 function wrap(t,max,lines){const words=String(t).split(/\s+/),out=[];let line="";words.forEach(w=>{const test=line?line+" "+w:w;if(test.length>max&&line){out.push(line);line=w}else line=test});if(line)out.push(line);while(out.length<lines)out.push("");return out.slice(0,lines);}
 function mapsDirectionsUrl(v){return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent((v.address||[]).filter(Boolean).join(", ")||v.name)}`;}
 function openDirections(v){window.open(mapsDirectionsUrl(v),"_blank","noopener");}
-function openVenue(id){const v=venueById(id);if(!v)return;const st=popupStage();st.dataset.editorScreen="venueTemplate";st.dataset.editorVenue=id;const bg={...BOOK_ART_FRAME,r:0,opacity:1,z:0,name:"Venue UI"};imgLayer(st,bg,DATA.assets.venue1);drawVenue(st,v);bookHome(st);tabs(st,id);}
+async function openVenue(id){
+  const v=venueById(id);if(!v)return;
+  const token=showLoadingScreen();
+  await preloadAssets(venuePageAssets(v));
+  const st=popupStage();st.dataset.editorScreen="venueTemplate";st.dataset.editorVenue=id;const bg={...BOOK_ART_FRAME,r:0,opacity:1,z:0,name:"Venue UI"};imgLayer(st,bg,DATA.assets.venue1);drawVenue(st,v);bookHome(st);tabs(st,id);revealWhenReady(token,st);
+}
 function drawVenue(st,v){
   const tl=DATA.layout.venueTemplate.layers.filter(l=>l.type==="text"),
     img=mapVenueLayer(DATA.layout.venueTemplate.layers.find(l=>l.type==="image"&&l.name.toLowerCase().includes("exhaust broken"))||{x:41,y:337,w:121,h:97,r:0,opacity:1,z:3}),
@@ -1233,11 +1327,21 @@ function openPartRestoration(v,options={}){
 function openWebPopup(url,title,externalUrl=url){
   if(!url)return;
   closePopup();
+  const token=showLoadingScreen();
+  const shell=document.createElement("div");
+  shell.className="stageCardShell webStageShell";
+  shell.dataset.cardShell="web";
+  const stage=document.createElement("div");
+  stage.className="stageCardStage";
   const d=document.createElement("div");
-  d.className="webPanel";
+  d.className="webPanel webStagePanel";
   d.innerHTML=`<div class="webBar"><strong>${esc(title)}</strong><a href="${esc(externalUrl)}" target="_blank" rel="noopener">Open full page</a><button type="button" data-close aria-label="Close">×</button></div><div class="webFrameWrap"><iframe title="${esc(title)}" referrerpolicy="no-referrer-when-downgrade" allowfullscreen src="${esc(url)}"></iframe></div>`;
-  overlayRoot.appendChild(d);
-  d.querySelector("[data-close]").onclick=()=>d.remove();
+  stage.appendChild(d);
+  shell.appendChild(stage);
+  overlayRoot.appendChild(shell);
+  d.querySelector("[data-close]").onclick=()=>{shell.remove();hideLoadingScreen(token);};
+  d.querySelector("iframe").addEventListener("load",()=>hideLoadingScreen(token),{once:true});
+  setTimeout(()=>hideLoadingScreen(token),2500);
 }
 function openMap(){openWebPopup(DATA.routeMapUrl||"https://www.google.com/maps","Route Map");}
 function openBanter(){openWebPopup(DATA.banterWidgetUrl||"https://widgets.justgiving.com/crowdfunding-pledge-box/?id=burtonbanter&layout=large&showStory=true","Banter Box",DATA.banterUrl||DATA.banterWidgetUrl);}
@@ -1291,11 +1395,90 @@ async function reserveUsername(username,uid){const u=username.toLowerCase(),ref=
 async function handleRegister(updateOnly=false){const email=document.getElementById("authEmail").value.trim(),pass=document.getElementById("authPassword").value,user=document.getElementById("authUsername").value.trim(),terms=document.getElementById("authTerms").checked,bad=badUsername(user); if(email)storageSet("restorationRouteLastEmail",email);if(bad)return openAuthPanel(updateOnly?"complete":"register",bad);if(!terms)return openAuthPanel(updateOnly?"complete":"register","You need to accept the terms to use the app.");try{if(updateOnly&&currentUser){await reserveUsername(user,currentUser.uid);state.username=user;state.termsAccepted=true;await fb.updateProfile(currentUser,{displayName:user}).catch(()=>{});await saveCloud();closeAuthPanel();renderHome();return}const cred=await fb.createUserWithEmailAndPassword(auth,email,pass);currentUser=cred.user;await reserveUsername(user,cred.user.uid);await fb.updateProfile(cred.user,{displayName:user}).catch(()=>{});await fb.sendEmailVerification(cred.user).catch(()=>{});state={...defaultState(),uid:cred.user.uid,email,username:user,termsAccepted:true,emailVerified:false};await saveCloud();closeAuthPanel();renderHome();openProfile("Verification email sent. Progress saves now. Prize entries become eligible once your email is verified.");}catch(e){openAuthPanel(updateOnly?"complete":"register",friendlyAuthError(e,"Could not create that account."));}}
 async function handleLogin(){try{const email=document.getElementById("authEmail").value.trim(); if(email)storageSet("restorationRouteLastEmail",email); await fb.signInWithEmailAndPassword(auth,email,document.getElementById("authPassword").value)}catch(e){openAuthPanel("login",friendlyAuthError(e,"Could not sign in."))}}
 async function handleForgotLogin(){const email=(document.getElementById("recoverEmail")?.value||"").trim();if(!email)return openAuthPanel("forgot","Enter the email address used for this app.");try{storageSet("restorationRouteLastEmail",email);const url=location.origin&&location.pathname?location.origin+location.pathname:location.href.split(/[?#]/)[0];await fb.sendPasswordResetEmail(auth,email,{url,handleCodeInApp:false});openAuthPanel("login","Reset email sent. Open the email, set a new password, then sign in here with your email address.");}catch(e){openAuthPanel("forgot",friendlyAuthError(e,"Could not send the reset email."));}}
-function openProfile(msg=""){if(typeof msg!=="string")msg="";stageCard(`<h2>Profile</h2>${msg?`<p>${esc(msg)}</p>`:""}<p>Email: ${esc(state.email||"")}</p><p>Username: ${esc(state.username||"")}</p><p>Email verified: ${state.emailVerified?"Yes":"No"}</p>${!state.emailVerified?'<button id="resendVerification">Resend Verification Email</button><button id="refreshVerification">I Verified It</button>':""}<button id="changeUsername">Change Username</button><button id="profileLogout" class="profileDanger">Log Out</button><button data-close>Close</button>`,"stageCard profileCard",d=>{const r=d.querySelector("#resendVerification");if(r)r.onclick=()=>currentUser&&!currentUser.__local&&fb.sendEmailVerification(currentUser);const rf=d.querySelector("#refreshVerification");if(rf)rf.onclick=async()=>{if(!currentUser||currentUser.__local)return;await fb.reload(currentUser);state.emailVerified=!!auth.currentUser.emailVerified;await saveCloud();closeCard();openProfile();};const cu=d.querySelector("#changeUsername");if(cu)cu.onclick=()=>openUsernameEditor();const lo=d.querySelector("#profileLogout");if(lo)lo.onclick=()=>{closeCard();openLogout();};});}
+function openProfile(msg=""){if(typeof msg!=="string")msg="";stageCard(`<h2>Profile</h2>${msg?`<p>${esc(msg)}</p>`:""}<p>Email: ${esc(state.email||"")}</p><p>Username: ${esc(state.username||"")}</p><p>Email verified: ${state.emailVerified?"Yes":"No"}</p>${!state.emailVerified?'<button id="resendVerification">Resend Verification Email</button><button id="refreshVerification">I Verified It</button>':""}<button id="changeUsername">Change Username</button><button id="profileLogout" class="profileLogoutAsset" aria-label="Log Out"><img src="${esc(DATA.assets.menuButtons?.logout||"assets/menu_buttons_restoration_route_button_log_out_true_alpha.webp")}" alt="Log Out"></button>`,"stageCard profileCard",d=>{const r=d.querySelector("#resendVerification");if(r)r.onclick=()=>currentUser&&!currentUser.__local&&fb.sendEmailVerification(currentUser);const rf=d.querySelector("#refreshVerification");if(rf)rf.onclick=async()=>{if(!currentUser||currentUser.__local)return;await fb.reload(currentUser);state.emailVerified=!!auth.currentUser.emailVerified;await saveCloud();closeCard();openProfile();};const cu=d.querySelector("#changeUsername");if(cu)cu.onclick=()=>openUsernameEditor();const lo=d.querySelector("#profileLogout");if(lo)lo.onclick=()=>{closeCard();openLogout();};});}
 function openUsernameEditor(){stageCard(`<h2>Change Username</h2><p>Enter the public username friends can use to find you.</p><input id="newUsername" autocomplete="username" placeholder="Username" value="${esc(state.username||"")}"><button id="saveUsername">Save Username</button><button data-close>Cancel</button>`,"stageCard profileCard",d=>{d.querySelector("#saveUsername").onclick=async()=>{const user=d.querySelector("#newUsername").value.trim();const bad=badUsername(user);if(bad){closeCard();return stageCard(`<h2>Username</h2><p>${esc(bad)}</p><button data-close>Close</button>`,"stageCard profileCard")}try{if(currentUser&&!currentUser.__local&&firebaseReady){await reserveUsername(user,currentUser.uid);await fb.updateProfile(currentUser,{displayName:user}).catch(()=>{});}state.username=user;state.termsAccepted=true;await saveCloud();closeCard();openProfile("Username updated.");}catch(e){closeCard();stageCard(`<h2>Username</h2><p>${esc(friendlyAuthError(e,"Could not update that username."))}</p><button data-close>Close</button>`,"stageCard profileCard");}};});}
 function socialUserId(){return currentUser?.uid||state.uid||"local-test-user";}
 function pairLabel(a,b){return [a,b].sort().join("|");}
 function planDateText(p){return [p.suggestedDate,p.suggestedTime].filter(Boolean).join(" ")||"Time to confirm";}
+function currentPlanResponse(p,uid=socialUserId()){
+  const responses=p?.responses||{};
+  if(responses[uid])return responses[uid];
+  if(p?.status==="cancelled")return "cancelled";
+  if(p?.ownerUid===uid)return "confirmed";
+  if(p?.status==="confirmed")return "confirmed";
+  return p?.status||"suggested";
+}
+function planStatusText(p){
+  if(p?.status==="cancelled")return "cancelled";
+  const response=currentPlanResponse(p);
+  if(response==="declined")return "not coming";
+  if(response==="cancelled")return "cancelled";
+  if(p?.ownerUid===socialUserId()){
+    const responses=p.responses||{};
+    const ids=(Array.isArray(p.friendUids)?p.friendUids:[]).filter(Boolean);
+    const pending=ids.filter(id=>(responses[id]||"suggested")==="suggested").length;
+    if(p.status==="confirmed"||(!pending&&ids.length))return "confirmed";
+    return "awaiting replies";
+  }
+  if(response==="confirmed")return "confirmed";
+  return "invited";
+}
+function planTimeValue(p){
+  if(!p?.suggestedDate)return Number.MAX_SAFE_INTEGER;
+  const date=new Date(`${p.suggestedDate}T${p.suggestedTime||"00:00"}`);
+  return Number.isFinite(date.getTime())?date.getTime():Number.MAX_SAFE_INTEGER;
+}
+function visibleMeetupPlans(meetups=[]){
+  return [...meetups].filter(p=>{
+    const response=currentPlanResponse(p);
+    return p.status!=="cancelled"&&response!=="declined"&&response!=="cancelled";
+  }).sort((a,b)=>planTimeValue(a)-planTimeValue(b));
+}
+function icsEscape(value){
+  return String(value||"").replace(/\\/g,"\\\\").replace(/\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;");
+}
+function icsDate(date,time,plusHours=0){
+  const base=date?new Date(`${date}T${time||"12:00"}`):new Date(Date.now()+86400000);
+  if(!Number.isFinite(base.getTime()))return icsDate("",time,plusHours);
+  base.setHours(base.getHours()+plusHours);
+  const pad=n=>String(n).padStart(2,"0");
+  return `${base.getFullYear()}${pad(base.getMonth()+1)}${pad(base.getDate())}T${pad(base.getHours())}${pad(base.getMinutes())}00`;
+}
+async function addPlanToCalendar(planId){
+  const data=await loadSocialData();
+  const plan=(data.meetups||[]).find(p=>p.id===planId);
+  if(!plan)throw new Error("That meet-up could not be found.");
+  const venue=venueById(plan.venueId)||{name:plan.venueName,address:[]};
+  const location=(venue.address||[]).filter(Boolean).join(", ")||plan.venueName||"The Restoration Route";
+  const mapUrl=mapsDirectionsUrl(venue);
+  const title=`The Restoration Route: ${plan.venueName||"Meet-up"}`;
+  const description=[plan.note,`With: ${planPeopleText(plan)}`,`Map: ${mapUrl}`].filter(Boolean).join("\n");
+  const ics=[
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//The Restoration Route//Meet Up//EN",
+    "BEGIN:VEVENT",
+    `UID:${icsEscape(plan.id||String(Date.now()))}@restoration-route`,
+    `DTSTAMP:${icsDate("", "", 0)}`,
+    `DTSTART:${icsDate(plan.suggestedDate,plan.suggestedTime,0)}`,
+    `DTEND:${icsDate(plan.suggestedDate,plan.suggestedTime,1)}`,
+    `SUMMARY:${icsEscape(title)}`,
+    `LOCATION:${icsEscape(location)}`,
+    `DESCRIPTION:${icsEscape(description)}`,
+    `URL:${icsEscape(mapUrl)}`,
+    "END:VEVENT",
+    "END:VCALENDAR"
+  ].join("\r\n");
+  const blob=new Blob([ics],{type:"text/calendar;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download="restoration-route-meet-up.ics";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
 function localTestUserByUsername(username){
   const key=cleanText(username,32).toLowerCase();
   return LOCAL_TEST_SOCIAL_USERS.find(u=>u.username.toLowerCase()===key)||null;
@@ -1326,37 +1509,73 @@ async function addFriendByUsername(username){
   const target=await findUserByUsername(username),uid=socialUserId();
   if(target.uid===uid)throw new Error("That is your own username.");
   if(LOCAL_TEST_MODE||!firebaseReady||!currentUser||currentUser.__local){
-    if(!socialCache.friends.some(f=>f.uid===target.uid))socialCache.friends.push({uid:target.uid,username:target.username,completedVehicles:0,totalPartsRestored:0});
+    if((socialCache.friends||[]).some(f=>f.uid===target.uid))throw new Error("That user is already in your friends list.");
+    const incoming=(socialCache.friendRequests||[]).find(r=>r.uid===target.uid&&r.status==="pending");
+    if(incoming){
+      await respondToFriendRequest(incoming.id,true);
+      return {...target,accepted:true};
+    }
+    if((socialCache.sentFriendRequests||[]).some(r=>r.uid===target.uid&&r.status==="pending"))throw new Error("Friend request already sent.");
+    socialCache.sentFriendRequests=[...(socialCache.sentFriendRequests||[]),{id:"local-sent-"+Date.now(),uid:target.uid,username:target.username,requesterUid:uid,requesterUsername:state.username||"Player",targetUid:target.uid,targetUsername:target.username,status:"pending"}];
     socialCache=normalizeLocalSocial(socialCache);
     saveLocalSocial();
     return target;
   }
   const memberIds=[uid,target.uid].sort(),id=await sha256(pairLabel(uid,target.uid));
-  await fb.setDoc(fb.doc(db,"friendLinks",id),{
+  const ref=fb.doc(db,"friendLinks",id);
+  const existing=await fb.getDoc(ref).catch(()=>null);
+  if(existing&&existing.exists()){
+    const data=existing.data()||{};
+    if(data.status==="linked")throw new Error("That user is already in your friends list.");
+    if(data.status==="pending"&&data.targetUid===uid){
+      await respondToFriendRequest(id,true);
+      return {...target,accepted:true};
+    }
+    if(data.status==="pending")throw new Error("Friend request already sent.");
+  }
+  await fb.setDoc(ref,{
     memberIds,
     requesterUid:uid,
     requesterUsername:state.username||currentUser.displayName||"Player",
     targetUid:target.uid,
     targetUsername:target.username,
-    status:"linked",
+    status:"pending",
     updatedAt:fb.serverTimestamp(),
     createdAt:fb.serverTimestamp()
   },{merge:true});
   return target;
 }
+async function respondToFriendRequest(requestId,accepted){
+  const uid=socialUserId();
+  if(LOCAL_TEST_MODE||!firebaseReady||!currentUser||currentUser.__local){
+    const request=(socialCache.friendRequests||[]).find(r=>r.id===requestId);
+    if(request&&accepted&&!(socialCache.friends||[]).some(f=>f.uid===request.uid)){
+      socialCache.friends=[...(socialCache.friends||[]),{uid:request.uid,username:request.username,completedVehicles:request.completedVehicles||0,totalPartsRestored:request.totalPartsRestored||0}];
+    }
+    socialCache.friendRequests=(socialCache.friendRequests||[]).filter(r=>r.id!==requestId);
+    socialCache=normalizeLocalSocial(socialCache);
+    saveLocalSocial();
+    return;
+  }
+  await fb.setDoc(fb.doc(db,"friendLinks",requestId),{status:accepted?"linked":"declined",updatedAt:fb.serverTimestamp()},{merge:true});
+}
 async function loadSocialData(){
-  if(!appSessionActive())return {friends:[],meetups:[]};
+  if(!appSessionActive())return {friends:[],meetups:[],friendRequests:[],sentFriendRequests:[]};
   const uid=socialUserId();
   if(LOCAL_TEST_MODE||!firebaseReady||!currentUser||currentUser.__local){
     socialCache=normalizeLocalSocial(socialCache);
     saveLocalSocial();
-    return {friends:[...(socialCache.friends||[])],meetups:[...(socialCache.meetups||[])]};
+    return {friends:[...(socialCache.friends||[])],meetups:[...(socialCache.meetups||[])],friendRequests:[...(socialCache.friendRequests||[])],sentFriendRequests:[...(socialCache.sentFriendRequests||[])]};
   }
   const friendSnap=await fb.getDocs(fb.query(fb.collection(db,"friendLinks"),fb.where("memberIds","array-contains",uid),fb.limit(50)));
-  const friendMeta=[];
+  const friendMeta=[],friendRequests=[],sentFriendRequests=[];
   friendSnap.forEach(docSnap=>{
-    const d=docSnap.data()||{},ids=d.memberIds||[],other=ids.find(x=>x!==uid);
-    if(other)friendMeta.push({uid:other,username:other===d.requesterUid?d.requesterUsername:d.targetUsername});
+    const d=docSnap.data()||{},ids=d.memberIds||[],other=ids.find(x=>x!==uid),status=d.status||"linked";
+    if(!other)return;
+    const row={id:docSnap.id,uid:other,username:other===d.requesterUid?d.requesterUsername:d.targetUsername,requesterUid:d.requesterUid,requesterUsername:d.requesterUsername,targetUid:d.targetUid,targetUsername:d.targetUsername,status};
+    if(status==="linked")friendMeta.push(row);
+    else if(status==="pending"&&d.targetUid===uid)friendRequests.push(row);
+    else if(status==="pending"&&d.requesterUid===uid)sentFriendRequests.push(row);
   });
   const friends=await Promise.all(friendMeta.map(async f=>{
     const board=await fb.getDoc(fb.doc(db,"leaderboard",f.uid)).catch(()=>null);
@@ -1367,7 +1586,7 @@ async function loadSocialData(){
   const meetups=[];
   planSnap.forEach(docSnap=>meetups.push({id:docSnap.id,...(docSnap.data()||{})}));
   meetups.sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
-  return {friends,meetups};
+  return {friends,meetups,friendRequests,sentFriendRequests};
 }
 async function saveMeetupPlan(friendUids,venueId,date,time,note){
   const uid=socialUserId(),data=await loadSocialData(),selectedIds=[...new Set((Array.isArray(friendUids)?friendUids:[friendUids]).map(String).filter(Boolean))],friends=selectedIds.map(id=>(data.friends||[]).find(f=>f.uid===id)),venue=venueById(venueId);
@@ -1375,7 +1594,8 @@ async function saveMeetupPlan(friendUids,venueId,date,time,note){
   if(friends.some(f=>!f))throw new Error("Choose friends from your linked friend list.");
   if(!venue)throw new Error("Choose a venue.");
   const friendNames=friends.map(f=>f.username||"Friend");
-  const plan={memberIds:[uid,...friends.map(f=>f.uid)].sort(),ownerUid:uid,ownerUsername:state.username||currentUser?.displayName||"Player",friendUid:friends[0].uid,friendUsername:friendNames.join(", "),friendUids:friends.map(f=>f.uid),friendUsernames:friendNames,venueId:venue.id,venueName:venue.name,suggestedDate:date||"",suggestedTime:time||"",note:cleanText(note,180),status:"suggested"};
+  const responses=Object.fromEntries([[uid,"confirmed"],...friends.map(f=>[f.uid,"suggested"])]);
+  const plan={memberIds:[uid,...friends.map(f=>f.uid)].sort(),ownerUid:uid,ownerUsername:state.username||currentUser?.displayName||"Player",friendUid:friends[0].uid,friendUsername:friendNames.join(", "),friendUids:friends.map(f=>f.uid),friendUsernames:friendNames,venueId:venue.id,venueName:venue.name,suggestedDate:date||"",suggestedTime:time||"",note:cleanText(note,180),status:"suggested",responses};
   if(LOCAL_TEST_MODE||!firebaseReady||!currentUser||currentUser.__local){
     socialCache.meetups.unshift({id:"local-plan-"+Date.now(),...plan});
     saveLocalSocial();
@@ -1384,37 +1604,60 @@ async function saveMeetupPlan(friendUids,venueId,date,time,note){
   await fb.addDoc(fb.collection(db,"meetupPlans"),{...plan,createdAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp()});
 }
 async function updateMeetupStatus(planId,status){
+  const uid=socialUserId(),cleanStatus=status==="cancelled"?"cancelled":status==="declined"?"declined":status==="confirmed"?"confirmed":"suggested";
+  const applyStatus=plan=>{
+    const responses={...(plan.responses||{})};
+    if(cleanStatus==="cancelled"&&plan.ownerUid===uid)return {...plan,status:"cancelled",responses:{...responses,[uid]:"cancelled"}};
+    responses[uid]=cleanStatus==="cancelled"?"declined":cleanStatus;
+    const invited=(Array.isArray(plan.friendUids)?plan.friendUids:[]).filter(Boolean);
+    const allConfirmed=invited.length&&invited.every(id=>responses[id]==="confirmed");
+    return {...plan,responses,status:allConfirmed?"confirmed":"suggested"};
+  };
   if(LOCAL_TEST_MODE||!firebaseReady||!currentUser||currentUser.__local){
-    socialCache.meetups=(socialCache.meetups||[]).map(p=>p.id===planId?{...p,status}:p);
+    socialCache.meetups=(socialCache.meetups||[]).map(p=>p.id===planId?applyStatus(p):p);
     saveLocalSocial();
     return;
   }
-  await fb.setDoc(fb.doc(db,"meetupPlans",planId),{status,updatedAt:fb.serverTimestamp()},{merge:true});
+  const ref=fb.doc(db,"meetupPlans",planId),snap=await fb.getDoc(ref);
+  if(!snap.exists())throw new Error("That meet-up could not be found.");
+  const next=applyStatus({id:planId,...(snap.data()||{})});
+  await fb.setDoc(ref,{responses:next.responses,status:next.status,updatedAt:fb.serverTimestamp()},{merge:true});
 }
 async function openInviteFriends(msg="",mode="friends"){
   if(typeof msg!=="string")msg="";
   mode=mode==="meetup"?"meetup":"friends";
   if(!requireLogin())return;
-  const d=inviteFriendsCard(`<h2>${mode==="meetup"?"Suggest Meet-Up":"Invite Friends"}</h2>${msg?`<p class="authError">${esc(msg)}</p>`:""}<div id="inviteFriendsBody"><p>Loading friends...</p></div><button data-close>Close</button>`);
+  const d=inviteFriendsCard(`<h2>${mode==="meetup"?"Suggest Meet-Up":"Invite Friends"}</h2>${msg?`<p class="authError">${esc(msg)}</p>`:""}<div id="inviteFriendsBody"><p>Loading friends...</p></div>`);
   try{
     const data=await loadSocialData();
-    const friends=data.friends||[],meetups=data.meetups||[];
+    const friends=data.friends||[],meetups=visibleMeetupPlans(data.meetups||[]),friendRequests=data.friendRequests||[],sentFriendRequests=data.sentFriendRequests||[];
     const venueOptions=routeVenues().map(v=>`<option value="${esc(v.id)}">${esc(v.name)}</option>`).join("");
     const friendRows=friends.map(f=>`<div class="socialRow"><strong>${esc(f.username||"Friend")}</strong><span>${Number(f.completedVehicles||0)} vehicles restored · ${Number(f.totalPartsRestored||0)} components restored</span></div>`).join("")||`<p>No friends linked yet.</p>`;
     const friendChoices=friends.map(f=>`<label class="meetupFriendChoice"><input data-meetup-friend type="checkbox" value="${esc(f.uid)}"><span>${esc(f.username||"Friend")}</span></label>`).join("");
-    const planRows=meetups.map(p=>{
-      const canConfirm=p.status==="suggested"&&p.ownerUid!==socialUserId();
-      return `<div class="socialRow socialPlan"><strong>${esc(p.venueName||"Meet-up")}</strong><span>${esc(planDateText(p))} · ${esc(planPeopleText(p))} · ${esc(p.status||"suggested")}</span>${p.note?`<em>${esc(p.note)}</em>`:""}<div>${canConfirm?`<button data-plan-status="${esc(p.id)}" data-status="confirmed">Confirm</button>`:""}<button data-plan-status="${esc(p.id)}" data-status="cancelled">Cancel</button></div></div>`;
-    }).join("")||`<p>No meet-up plans yet.</p>`;
+    const requestRows=friendRequests.map(r=>`<div class="socialRow socialRequest"><strong>${esc(r.username||"Friend")}</strong><span>Wants to connect on The Restoration Route.</span><div><button data-friend-request="${esc(r.id)}" data-action="accept">Accept</button><button data-friend-request="${esc(r.id)}" data-action="reject">Reject</button></div></div>`).join("");
+    const sentRows=sentFriendRequests.map(r=>`<div class="socialRow"><strong>${esc(r.username||"Friend")}</strong><span>Request sent.</span></div>`).join("");
+    const inviteRows=meetups.map(p=>{
+      const response=currentPlanResponse(p),isOwner=p.ownerUid===socialUserId();
+      const actionLabel=response==="confirmed"?"Can't Come":"Reject";
+      const buttons=[
+        response!=="confirmed"?`<button data-plan-status="${esc(p.id)}" data-status="confirmed">Accept</button>`:"",
+        response==="confirmed"?`<button data-calendar-plan="${esc(p.id)}">Add To Calendar</button>`:"",
+        !isOwner?`<button data-plan-status="${esc(p.id)}" data-status="declined">${actionLabel}</button>`:"",
+        isOwner?`<button data-plan-status="${esc(p.id)}" data-status="cancelled">Cancel</button>`:""
+      ].filter(Boolean).join("");
+      return `<div class="socialRow socialPlan"><strong>${esc(p.venueName||"Meet-up")}</strong><span>${esc(planDateText(p))} · ${esc(planPeopleText(p))} · ${esc(planStatusText(p))}</span>${p.note?`<em>${esc(p.note)}</em>`:""}<div>${buttons}</div></div>`;
+    }).join("")||`<p>No meet-up invitations yet.</p>`;
     const body=d.querySelector("#inviteFriendsBody");
-    const inviteMarkup=`<div class="friendSearch"><input id="friendUsernameSearch" autocomplete="off" placeholder="Username"><button id="friendSearchButton">Add Friend</button></div><h3>Linked Friends</h3><div class="socialRows">${friendRows}</div>`;
-    const meetupMarkup=`${friends.length?`<div class="meetupFriendChoices">${friendChoices}</div><select id="meetupVenue">${venueOptions}</select><div class="meetupWhen"><input id="meetupDate" type="date"><input id="meetupTime" type="time"></div><textarea id="meetupNote" rows="2" placeholder="Message or plan"></textarea><button id="sendMeetupPlan">Send Suggestion</button>`:`<p>Add a friend before suggesting a meet-up.</p>`}<h3>Plans</h3><div class="socialRows">${planRows}</div>`;
-    body.innerHTML=mode==="meetup"?`<h3>Friends</h3>${meetupMarkup}`:`${inviteMarkup}<h3>Plans</h3><div class="socialRows">${planRows}</div>`;
+    const inviteMarkup=`<div class="friendSearch"><input id="friendUsernameSearch" autocomplete="off" placeholder="Username"><button id="friendSearchButton">Send Request</button></div>${requestRows?`<h3>Friend Requests</h3><div class="socialRows">${requestRows}</div>`:""}${sentRows?`<h3>Sent Requests</h3><div class="socialRows">${sentRows}</div>`:""}<h3>Linked Friends</h3><div class="socialRows">${friendRows}</div>`;
+    const meetupMarkup=`${friends.length?`<div class="meetupFriendChoices">${friendChoices}</div><select id="meetupVenue">${venueOptions}</select><div class="meetupWhen"><input id="meetupDate" type="date"><input id="meetupTime" type="time"></div><textarea id="meetupNote" rows="2" placeholder="Message or meet-up details"></textarea><button id="sendMeetupPlan">Send Suggestion</button>`:`<p>Add a friend before suggesting a meet-up.</p>`}<h3>Invitations & Replies</h3><div class="socialRows">${inviteRows}</div>`;
+    body.innerHTML=mode==="meetup"?`<h3>Friends</h3>${meetupMarkup}`:inviteMarkup;
     const friendSearchButton=d.querySelector("#friendSearchButton");
-    if(friendSearchButton)friendSearchButton.onclick=async()=>{try{const target=await addFriendByUsername(d.querySelector("#friendUsernameSearch").value);refreshMenuSocialSummary();closeCard();openInviteFriends(`${target.username} added to your friends.`);}catch(e){closeCard();openInviteFriends(e.message||"Could not add that friend.");}};
+    if(friendSearchButton)friendSearchButton.onclick=async()=>{try{const target=await addFriendByUsername(d.querySelector("#friendUsernameSearch").value);refreshMenuSocialSummary();closeCard();openInviteFriends(target.accepted?`${target.username} is now in your friends list.`:`Friend request sent to ${target.username}.`);}catch(e){closeCard();openInviteFriends(e.message||"Could not add that friend.");}};
     const send=d.querySelector("#sendMeetupPlan");
     if(send)send.onclick=async()=>{try{const friendIds=[...d.querySelectorAll("[data-meetup-friend]:checked")].map(x=>x.value);await saveMeetupPlan(friendIds,d.querySelector("#meetupVenue").value,d.querySelector("#meetupDate").value,d.querySelector("#meetupTime").value,d.querySelector("#meetupNote").value);refreshMenuSocialSummary();closeCard();openSuggestMeetup("Meet-up suggestion saved.");}catch(e){closeCard();openSuggestMeetup(e.message||"Could not save that meet-up.");}};
+    d.querySelectorAll("[data-friend-request]").forEach(b=>b.onclick=async()=>{await respondToFriendRequest(b.dataset.friendRequest,b.dataset.action==="accept");refreshMenuSocialSummary();closeCard();openInviteFriends(b.dataset.action==="accept"?"Friend request accepted.":"Friend request rejected.");});
     d.querySelectorAll("[data-plan-status]").forEach(b=>b.onclick=async()=>{await updateMeetupStatus(b.dataset.planStatus,b.dataset.status);refreshMenuSocialSummary();closeCard();openInviteFriends(`Meet-up ${b.dataset.status}.`,mode);});
+    d.querySelectorAll("[data-calendar-plan]").forEach(b=>b.onclick=async()=>{try{await addPlanToCalendar(b.dataset.calendarPlan);}catch(e){closeCard();openInviteFriends(e.message||"Could not add that meet-up to your calendar.",mode);}});
   }catch(e){
     d.querySelector("#inviteFriendsBody").innerHTML=`<p>${esc(e.message||"Could not load friends right now.")}</p>`;
   }
@@ -1545,7 +1788,7 @@ async function logoutVenueAccount(){
 function openIssues(){location.href=`mailto:${DATA.terms.contactEmail}?subject=The%20Restoration%20Route%20Issue&body=${encodeURIComponent("User: "+(state.username||"")+"\nEmail: "+(state.email||"")+"\n\nIssue:\n")}`;}
 function openLogout(){stageCard(`<h2>Log Out</h2><p>Progress is saved to your account if online sync has completed.</p><button id="logoutConfirm" class="profileDanger">Log Out</button><button data-close>Cancel</button>`,"stageCard profileCard",d=>{d.querySelector("#logoutConfirm").onclick=async()=>{try{if(auth&&fb?.signOut)await fb.signOut(auth)}catch(e){} currentUser=null; state=defaultState(); try{localStorage.removeItem(STORE_KEY);localStorage.removeItem("restorationRouteLastEmail")}catch(e){} closeCard(); renderHome(); openAuthPanel("register")}});}
 function openAdmin(){card(`<h2>Garage Admin</h2><input id="adminCode" placeholder="Code"><button id="adminUnlock">Unlock</button><button data-close>Close</button>`,()=>{document.getElementById("adminUnlock").onclick=()=>{if(document.getElementById("adminCode").value!==ADMIN_CODE)return;closeCard();card(`<h2>Chip’s Big Red Button</h2><button id="repairAll">Repair All Components</button><button id="completeVehicle">Complete Vehicle</button><button id="resetVehicle">Reset Current Vehicle</button><button data-close>Close</button>`,()=>{document.getElementById("repairAll").onclick=async()=>{DATA.venues.forEach(v=>state.repaired[v.id]=true);state.routeCompleted=true;await saveCloud();closeCard();renderHome();openVehicleCompletionRestoration()};document.getElementById("completeVehicle").onclick=async()=>{await completeVehicle("admin_complete");closeCard();renderHome()};document.getElementById("resetVehicle").onclick=async()=>{state.repaired=baseRepaired();state.hornBroken=false;state.routeCompleted=false;storageSet(COMPLETION_NOTICE_KEY,"");await saveCloud();closeCard();renderHome()};})}});}
-function card(html,after){const d=document.createElement("div");d.className="popCard";d.innerHTML=html;overlayRoot.appendChild(d);d.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeCard);if(after)after(d);return d;}
+function card(html,after){return stageCard(html,"stageCard",after);}
 function stageCard(html,extraClass="stageCard",after){
   const shell=document.createElement("div");
   shell.className="stageCardShell";
@@ -1554,7 +1797,7 @@ function stageCard(html,extraClass="stageCard",after){
   stage.className="stageCardStage";
   const d=document.createElement("div");
   d.className=("popCard "+extraClass).trim();
-  d.innerHTML=html;
+  d.innerHTML=`<button type="button" class="stageCardCloseX" data-close aria-label="Close">×</button>${html}`;
   stage.appendChild(d);
   shell.appendChild(stage);
   overlayRoot.appendChild(shell);
@@ -1746,12 +1989,17 @@ async function processScanToken(raw,source="qr_scan"){
   await repairVenue(v.id,source);
   return v;
 }
-function openScanner(){
+function scannerPageAssets(){
+  return [...DATA.layout.scanner.layers.map(l=>l.type==="image"?stableSrc(l.src,l.name):"").filter(Boolean),DATA.assets.scannerHomeButton];
+}
+async function openScanner(){
   if(!requireLogin())return;
+  const token=showLoadingScreen();
+  await preloadAssets(scannerPageAssets());
   closePopup();scannerRoot.innerHTML="";scannerRoot.style.display="block";
   const st=makeStage("scannerStage");
   DATA.layout.scanner.layers.forEach(l=>{if(l.type==="image"&&!l.name.toLowerCase().includes("scanner home"))imgLayer(st,l)});
-  const vp=document.createElement("div");vp.className="videoBox";Object.assign(vp.style,{left:"64px",top:"119px",width:"262px",height:"282px"});
+  const vp=document.createElement("div");vp.className="videoBox";Object.assign(vp.style,{left:"46px",top:"91px",width:"299px",height:"316px"});
   const video=document.createElement("video");video.setAttribute("playsinline","");video.muted=true;vp.appendChild(video);st.appendChild(vp);
   const h=DATA.layout.scanner.layers.find(l=>l.name.toLowerCase().includes("scanner home"));
   if(h){
@@ -1763,6 +2011,7 @@ function openScanner(){
   // Public build: scanner repair test buttons disabled.
   // addScannerRepairTestButtons(st);
   scannerRoot.appendChild(st);
+  revealWhenReady(token,st);
   if(IS_FILE_PREVIEW){
     vp.classList.add("localCameraPlaceholder");
     vp.innerHTML=`<div class="localCameraMessage"><strong>Local file test mode</strong><br>Camera scanning needs Live Server/HTTPS.<br>Open the hosted GitHub Pages version to scan route QR codes.</div>`;

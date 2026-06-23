@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0c0905">
 <title>The Restoration Route</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="styles.css?build=venue-ui-2026-06-23-v18">
+<link rel="stylesheet" href="styles.css?build=venue-ui-2026-06-23-v19">
 </head>
 <body>
 <div id="app">
@@ -14,8 +14,14 @@
   <div id="overlayRoot"></div>
   <div id="scannerRoot"></div>
 </div>
-<script src="data.js?build=venue-ui-2026-06-23-v18"></script>
-<script src="jsQR.js?build=venue-ui-2026-06-23-v18"></script>
-<script src="app.js?build=venue-ui-2026-06-23-v18"></script>
+<div id="loadingRoot" class="loadingRoot" aria-busy="true" aria-live="polite">
+  <div class="loadingStage">
+    <img class="loadingCog" src="assets/cog_loader.png" alt="">
+    <div class="loadingText" data-loading-text>Loading ...</div>
+  </div>
+</div>
+<script src="data.js?build=venue-ui-2026-06-23-v19"></script>
+<script src="jsQR.js?build=venue-ui-2026-06-23-v19"></script>
+<script src="app.js?build=venue-ui-2026-06-23-v19"></script>
 </body>
 </html>
