@@ -1,4 +1,4 @@
-const APP_BUILD = "venue-ui-2026-06-23-v12";
+const APP_BUILD = "venue-ui-2026-06-23-v13";
 const CACHE = "restoration-route-public-static-" + APP_BUILD;
 const ASSETS = [
   'index.html',

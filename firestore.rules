@@ -29,6 +29,11 @@ service cloud.firestore {
           hasVenueEditorDoc()
           && get(/databases/$(database)/documents/venueEditors/$(request.auth.uid)).data.venues[venueId] == true
         )
+        || (
+          signedIn()
+          && exists(/databases/$(database)/documents/venueProfiles/$(venueId))
+          && get(/databases/$(database)/documents/venueProfiles/$(venueId)).data.email == request.auth.token.email
+        )
       );
     }
     function validVenueProfileWrite(venueId) {
@@ -49,6 +54,45 @@ service cloud.firestore {
           'updatedByUsername'
         ]);
     }
+    function incomingMember() {
+      return signedIn()
+        && request.resource.data.memberIds.size() == 2
+        && request.auth.uid in request.resource.data.memberIds;
+    }
+    function existingMember() {
+      return signedIn()
+        && resource.data.memberIds.size() == 2
+        && request.auth.uid in resource.data.memberIds;
+    }
+    function validFriendLinkWrite() {
+      return request.resource.data.keys().hasOnly([
+        'memberIds',
+        'requesterUid',
+        'requesterUsername',
+        'targetUid',
+        'targetUsername',
+        'status',
+        'createdAt',
+        'updatedAt'
+      ]);
+    }
+    function validMeetupWrite() {
+      return request.resource.data.keys().hasOnly([
+        'memberIds',
+        'ownerUid',
+        'ownerUsername',
+        'friendUid',
+        'friendUsername',
+        'venueId',
+        'venueName',
+        'suggestedDate',
+        'suggestedTime',
+        'note',
+        'status',
+        'createdAt',
+        'updatedAt'
+      ]);
+    }
 
     match /userVisits/{userId} {
       allow read, create, update: if isOwner(userId);
@@ -67,6 +111,25 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create, update: if isOwner(userId);
       allow delete: if false;
+    }
+
+    match /friendLinks/{linkId} {
+      allow read: if existingMember();
+      allow create: if incomingMember() && validFriendLinkWrite();
+      allow update: if existingMember() && incomingMember() && validFriendLinkWrite();
+      allow delete: if existingMember();
+    }
+
+    match /meetupPlans/{planId} {
+      allow read: if existingMember();
+      allow create: if incomingMember()
+        && validMeetupWrite()
+        && validVenueId(request.resource.data.venueId);
+      allow update: if existingMember()
+        && incomingMember()
+        && validMeetupWrite()
+        && validVenueId(request.resource.data.venueId);
+      allow delete: if existingMember();
     }
 
     match /venueEditors/{userId} {
