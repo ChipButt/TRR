@@ -78,13 +78,15 @@ button{font:inherit}
   display:flex;
   align-items:center;
   justify-content:center;
+  flex-wrap:wrap;
   pointer-events:none;
   border-radius:10px;
   background:rgba(242,229,190,.86);
   color:#0a3156;
-  font-size:18px;
+  font-size:17px;
   font-weight:900;
   letter-spacing:0;
+  line-height:1.05;
   text-align:center;
   text-shadow:0 1px 0 rgba(255,255,255,.72);
   box-shadow:inset 0 0 0 1px rgba(10,49,86,.2);
@@ -182,7 +184,8 @@ button{font:inherit}
 .popCard input,.popCard textarea{width:100%;border:1px solid #0a3156;background:#fff8df;color:#0a3156;border-radius:9px;padding:9px;margin:8px 0}
 .popCard button{border:1px solid #0a3156;background:#0a3156;color:#f6e6bd;border-radius:10px;padding:9px 12px;margin:4px;font-weight:800}
 .popCard .livePreviewLink{display:inline-block;border:1px solid #0a3156;background:#0a3156;color:#f6e6bd;border-radius:10px;padding:10px 12px;font-weight:800;text-decoration:none}
-.inviteFriendsShell{
+.inviteFriendsShell,
+.stageCardShell{
   position:absolute;
   inset:0;
   z-index:1000;
@@ -190,7 +193,8 @@ button{font:inherit}
   pointer-events:auto;
   background:transparent;
 }
-.inviteFriendsStage{
+.inviteFriendsStage,
+.stageCardStage{
   position:absolute;
   left:var(--stageLeft,0px);
   top:var(--stageTop,0px);
@@ -200,7 +204,27 @@ button{font:inherit}
   transform-origin:top left;
   pointer-events:none;
 }
-.inviteFriendsStage .popCard.inviteFriendsCard{
+.stageCardStage .popCard.stageCard{
+  position:absolute;
+  left:28px;
+  top:134px;
+  transform:none;
+  width:334px;
+  max-height:576px;
+  display:block;
+  overflow:auto;
+  padding:16px;
+  border-radius:16px;
+  pointer-events:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+}
+.stageCardStage .profileCard .profileDanger{
+  background:#8d261f;
+  border-color:#8d261f;
+}
+.inviteFriendsStage .popCard.inviteFriendsCard,
+.stageCardStage .popCard.inviteFriendsCard{
   position:absolute;
   left:22px;
   top:76px;
@@ -293,6 +317,28 @@ button{font:inherit}
 .popCard.inviteFriendsCard .meetupWhen{
   grid-template-columns:1fr 1fr;
   gap:8px;
+}
+.popCard.inviteFriendsCard .meetupFriendChoices{
+  display:grid;
+  gap:6px;
+  margin:6px 0 8px;
+}
+.popCard.inviteFriendsCard .meetupFriendChoice{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  border:1px solid rgba(10,49,86,.32);
+  background:rgba(255,248,223,.58);
+  border-radius:8px;
+  padding:7px 8px;
+  font-size:13px;
+  font-weight:900;
+}
+.popCard.inviteFriendsCard .meetupFriendChoice input{
+  width:auto;
+  min-width:0;
+  margin:0;
+  flex:0 0 auto;
 }
 .webPanel{
   position:absolute;
