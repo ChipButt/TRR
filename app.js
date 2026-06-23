@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "venue-ui-2026-06-23-v19";
+const APP_BUILD = "venue-ui-2026-06-23-v20";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -127,6 +127,7 @@ function activateRememberedSession(){
 function restoreRememberedSession(){
   if(!activateRememberedSession())return false;
   closeAuthPanel();
+  warmAppDataAndAssets().catch(()=>{});
   renderHome();
   setTimeout(setScales,80);
   if(previewMode())openPreviewFromUrl();
@@ -148,6 +149,7 @@ const LOADING_COG_ASSET="assets/cog_loader.png";
 const HOME_MENU_LOGO={type:"image",name:"Restoration Route Menu Logo",src:MENU_LOGO_ASSET,x:92,y:76,w:219,h:61,r:0,opacity:1,z:35,className:"menuLogoLayer"};
 const VENUE_PROFILE_STORE_KEY=STORE_KEY+".venueProfiles.v1";
 const SOCIAL_STORE_KEY=STORE_KEY+".social.v1";
+const PAGE_LOADER_DELAY_MS=260;
 const LOCAL_TEST_SOCIAL_USERS=[
   {uid:"local-friend-workshopmate",username:"WorkshopMate",completedVehicles:2,totalPartsRestored:14},
   {uid:"local-friend-scalemate",username:"ScaleMate",completedVehicles:1,totalPartsRestored:8},
@@ -218,10 +220,11 @@ function normalizeLocalSocial(data={}){
     const ids=Array.isArray(p.friendUids)?p.friendUids:(p.friendUid?[p.friendUid]:[]);
     return ids.length&&ids.every(id=>byUid.has(id));
   });
-  return {friends,meetups,friendRequests,sentFriendRequests};
+  const messages=(data.messages||[]).filter(m=>byUid.has(m.friendUid||m.senderUid||m.recipientUid));
+  return {friends,meetups,friendRequests,sentFriendRequests,messages};
 }
 function loadLocalSocial(){
-  try{return normalizeLocalSocial({...{friends:[],meetups:[],friendRequests:LOCAL_TEST_FRIEND_REQUESTS,sentFriendRequests:[]},...JSON.parse(storageGet(SOCIAL_STORE_KEY,"{}"))})}catch{return normalizeLocalSocial({friends:[],meetups:[]})}
+  try{return normalizeLocalSocial({...{friends:[],meetups:[],friendRequests:LOCAL_TEST_FRIEND_REQUESTS,sentFriendRequests:[],messages:[]},...JSON.parse(storageGet(SOCIAL_STORE_KEY,"{}"))})}catch{return normalizeLocalSocial({friends:[],meetups:[],messages:[]})}
 }
 function saveLocalSocial(){storageSet(SOCIAL_STORE_KEY,JSON.stringify(socialCache));}
 function applyVenueProfiles(){
@@ -281,6 +284,7 @@ async function initFirebase(){
     state.termsAccepted=true;
     state.emailVerified=true;
     saveLocal();
+    await warmAppDataAndAssets({show:true,keepVisible:true});
     renderHome();
     return;
   }
@@ -322,6 +326,7 @@ async function initFirebase(){
           return;
         }
         await loadCloud(user);
+        await warmAppDataAndAssets({show:true,keepVisible:true});
         closeAuthPanel();
         renderHome();
         setTimeout(setScales,80);
@@ -523,7 +528,8 @@ function setScales(){
 addEventListener("resize",setScales);
 if(window.visualViewport)window.visualViewport.addEventListener("resize",()=>setTimeout(setScales,60));
 document.addEventListener("focusout",()=>setTimeout(setScales,250),true);
-let loadingToken=0, loadingFadeTimer=null;
+let loadingToken=0, loadingFadeTimer=null, appWarmPromise=null;
+const preloadedAssets=new Set();
 function showLoadingScreen(label="Loading ..."){
   if(!loadingRoot)return 0;
   const token=++loadingToken;
@@ -543,11 +549,13 @@ function hideLoadingScreen(token=0){
 function nextFrame(){return new Promise(resolve=>requestAnimationFrame(()=>resolve()));}
 function preloadImageAsset(src){
   if(!src)return Promise.resolve();
+  if(preloadedAssets.has(src))return Promise.resolve();
   return new Promise(resolve=>{
     const img=new Image();
     img.decoding="async";
-    img.onload=()=>{if(img.decode)img.decode().catch(()=>{}).then(resolve);else resolve();};
-    img.onerror=resolve;
+    const finish=()=>{preloadedAssets.add(src);resolve();};
+    img.onload=()=>{if(img.decode)img.decode().catch(()=>{}).then(finish);else finish();};
+    img.onerror=finish;
     img.src=src;
   });
 }
@@ -565,6 +573,16 @@ async function revealWhenReady(token,root){
 }
 async function preloadAssets(srcs=[]){
   await Promise.all([...new Set(srcs.filter(Boolean))].map(preloadImageAsset));
+}
+async function preloadAssetsWithOptionalLoader(srcs=[],label="Loading ..."){
+  const pending=[...new Set(srcs.filter(Boolean))].filter(src=>!preloadedAssets.has(src));
+  if(!pending.length)return 0;
+  let token=0,done=false;
+  const timer=setTimeout(()=>{if(!done)token=showLoadingScreen(label);},PAGE_LOADER_DELAY_MS);
+  await preloadAssets(pending);
+  done=true;
+  clearTimeout(timer);
+  return token;
 }
 function makeStage(c){const s=document.createElement("div");s.className="stage "+c;return s;}
 function layoutMode(){return false;}
@@ -820,7 +838,7 @@ function drawMenuButtonLabel(st,l,text){
 function drawMenuSocialSummary(st){
   const d=document.createElement("div");
   d.className="menuSocialPanel";
-  Object.assign(d.style,{left:"30px",top:"520px",width:"330px",height:"246px"});
+  Object.assign(d.style,{left:"28px",top:"500px",width:"334px",height:"294px"});
   d.innerHTML=menuSocialSummaryMarkup({meetups:[]},true);
   st.appendChild(d);
   bindMenuSocialActions(d);
@@ -834,11 +852,11 @@ function bindMenuSocialActions(panel){
   panel.querySelectorAll("[data-calendar-plan]").forEach(b=>b.onclick=async e=>{e.stopPropagation();try{await addPlanToCalendar(b.dataset.calendarPlan);}catch(err){}});
 }
 function menuSocialSummaryMarkup(data,loading=false){
-  const plans=visibleMeetupPlans(data.meetups||[]).slice(0,3);
+  const plans=visibleMeetupPlans(data.meetups||[]).slice(0,4);
   const planRows=plans.map(p=>{
     const response=currentPlanResponse(p);
     const calendar=response==="confirmed"?`<button class="menuCalendarButton" type="button" data-calendar-plan="${esc(p.id)}">Calendar</button>`:"";
-    return `<div class="menuPlanRow"><strong>${esc(p.venueName||"Meet-up")}</strong><span>${esc(planDateText(p))} · ${esc(planPeopleText(p))} · ${esc(planStatusText(p))}</span>${calendar}</div>`;
+    return `<div class="menuPlanRow"><strong>${esc(p.venueName||"Meet-up")}</strong><span>${esc(planDateText(p))}</span><span>${esc(planPeopleText(p))} · ${esc(planStatusText(p))}</span>${p.note?`<em>${esc(p.note)}</em>`:""}${calendar}</div>`;
   }).join("");
   return `<h3>Upcoming Plans</h3>${loading?`<p>Loading...</p>`:(planRows||`<p>No confirmed or upcoming plans yet.</p>`)}`;
 }
@@ -881,9 +899,53 @@ function directoryPageAssets(){
 function venuePageAssets(v){
   return [DATA.assets.venue1,DATA.assets.homeButton,...tabAssetList(v.id),state.repaired[v.id]?DATA.components[v.key]?.fixed:DATA.components[v.key]?.broken,state.repaired[v.id]?DATA.assets.repairStamp:""].filter(Boolean);
 }
+function repairPageAssets(){
+  const design=normalizeRepairDesign(getRepairUiDesign());
+  const layerAssets=(design.layers||[]).map(l=>repairLayerSrc(l,{key:"vehicle",isVehicleCompletion:false})).filter(Boolean);
+  return [design.stage?.background||"assets/repair_ui_background_v78.png",REPAIR_TRANSITION_VIDEO,...layerAssets];
+}
+function allAppAssets(){
+  const homeAssets=(DATA.layout.home.layers||[]).filter(l=>l.type==="image").map(l=>stableSrc(l.src,l.name));
+  const menuAssets=(DATA.layout.menu.layers||[]).filter(l=>l.type==="image").map(l=>menuButtonAsset(l));
+  const venueAssets=routeVenues().flatMap(v=>[
+    ...venuePageAssets(v),
+    DATA.components[v.key]?.broken,
+    DATA.components[v.key]?.fixed
+  ]);
+  return [
+    DATA.assets.home,
+    MENU_LOGO_ASSET,
+    DATA.assets.menu,
+    DATA.assets.scanner,
+    DATA.assets.banterBox,
+    DATA.assets.wallMap,
+    DATA.assets.serviceBook,
+    DATA.assets.scannerTool,
+    DATA.assets.scannerHomeButton,
+    DATA.assets.repairStamp,
+    ...homeAssets,
+    ...menuAssets,
+    ...directoryPageAssets(),
+    ...venueAssets,
+    ...scannerPageAssets(),
+    ...repairPageAssets()
+  ].filter(Boolean);
+}
+async function warmAppDataAndAssets({show=false,keepVisible=false}={}){
+  let token=0;
+  if(show)token=showLoadingScreen("Checking for updates ...");
+  if(!appWarmPromise){
+    appWarmPromise=Promise.allSettled([
+      preloadAssets(allAppAssets()),
+      appSessionActive()?loadSocialData():Promise.resolve(null)
+    ]).then(()=>true).catch(()=>false);
+  }
+  await appWarmPromise;
+  if(token&&!keepVisible)hideLoadingScreen(token);
+  return token;
+}
 async function openDirectory(){
-  const token=showLoadingScreen();
-  await preloadAssets(directoryPageAssets());
+  const token=await preloadAssetsWithOptionalLoader(directoryPageAssets());
   const st=popupStage();st.dataset.editorScreen="directory";const bg=DATA.layout.directory.layers.find(l=>l.name.toLowerCase().includes("garage directory ui"))||DATA.layout.directory.layers[0];imgLayer(st,bg,DATA.assets.directory);drawDirectory(st);tabs(st,"directory");bookHome(st);revealWhenReady(token,st);
 }
 function drawDirectory(st){
@@ -914,8 +976,7 @@ function mapsDirectionsUrl(v){return `https://www.google.com/maps/dir/?api=1&des
 function openDirections(v){window.open(mapsDirectionsUrl(v),"_blank","noopener");}
 async function openVenue(id){
   const v=venueById(id);if(!v)return;
-  const token=showLoadingScreen();
-  await preloadAssets(venuePageAssets(v));
+  const token=await preloadAssetsWithOptionalLoader(venuePageAssets(v));
   const st=popupStage();st.dataset.editorScreen="venueTemplate";st.dataset.editorVenue=id;const bg={...BOOK_ART_FRAME,r:0,opacity:1,z:0,name:"Venue UI"};imgLayer(st,bg,DATA.assets.venue1);drawVenue(st,v);bookHome(st);tabs(st,id);revealWhenReady(token,st);
 }
 function drawVenue(st,v){
@@ -1268,7 +1329,7 @@ function openPartRestoration(v,options={}){
   st.__repairOptions=options||{};
   const design=normalizeRepairDesign(getRepairUiDesign());
   const timing={...REPAIR_TIMING_DEFAULTS,...(design.timing||{})};
-  const bgBox=design.stage?.backgroundBox||{x:0,y:-39,w:390,h:844};
+  const bgBox={x:0,y:0,w:390,h:844,r:0,opacity:1};
   const repairBg=imgLayer(st,{...bgBox,name:"Repair UI background",z:0,opacity:1},design.stage?.background||"assets/repair_ui_background_v78.png");
   repairBg.classList.add("repairBackgroundLayer");
   const layers=[...(design.layers||[])].sort((a,b)=>(a.z||0)-(b.z||0));
@@ -1559,6 +1620,71 @@ async function respondToFriendRequest(requestId,accepted){
   }
   await fb.setDoc(fb.doc(db,"friendLinks",requestId),{status:accepted?"linked":"declined",updatedAt:fb.serverTimestamp()},{merge:true});
 }
+async function removeFriend(friend){
+  const uid=socialUserId();
+  if(!friend?.uid)throw new Error("That friend could not be found.");
+  if(LOCAL_TEST_MODE||!firebaseReady||!currentUser||currentUser.__local){
+    socialCache.friends=(socialCache.friends||[]).filter(f=>f.uid!==friend.uid);
+    socialCache.friendRequests=(socialCache.friendRequests||[]).filter(r=>r.uid!==friend.uid);
+    socialCache.sentFriendRequests=(socialCache.sentFriendRequests||[]).filter(r=>r.uid!==friend.uid);
+    socialCache=normalizeLocalSocial(socialCache);
+    saveLocalSocial();
+    return;
+  }
+  const linkId=friend.id||await sha256(pairLabel(uid,friend.uid));
+  await fb.deleteDoc(fb.doc(db,"friendLinks",linkId));
+}
+function confirmRemoveFriend(friend){
+  const name=friend?.username||"this friend";
+  closeCard();
+  stageCard(`<h2>Remove Friend</h2><p>Are you sure you want to remove ${esc(name)} from your friends list?</p><div class="confirmActions"><button id="cancelRemoveFriend">No</button><button id="confirmRemoveFriend" class="profileDanger">Yes</button></div>`,"stageCard profileCard",d=>{
+    d.querySelector("#cancelRemoveFriend").onclick=()=>{closeCard();openInviteFriends();};
+    d.querySelector("#confirmRemoveFriend").onclick=async()=>{try{await removeFriend(friend);refreshMenuSocialSummary();closeCard();openInviteFriends(`${name} removed from your friends list.`);}catch(e){closeCard();openInviteFriends(e.message||"Could not remove that friend.");}};
+  });
+}
+async function loadFriendMessages(friendUid){
+  const uid=socialUserId();
+  if(LOCAL_TEST_MODE||!firebaseReady||!currentUser||currentUser.__local){
+    return (socialCache.messages||[]).filter(m=>m.friendUid===friendUid||m.senderUid===friendUid||m.recipientUid===friendUid).slice(0,8);
+  }
+  const snap=await fb.getDocs(fb.query(fb.collection(db,"friendMessages"),fb.where("memberIds","array-contains",uid),fb.limit(40)));
+  const messages=[];
+  snap.forEach(docSnap=>{
+    const d=docSnap.data()||{};
+    if((d.memberIds||[]).includes(friendUid))messages.push({id:docSnap.id,...d});
+  });
+  return messages.sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)).slice(0,8);
+}
+async function sendFriendMessage(friend,body){
+  const clean=cleanText(body,300);
+  if(!clean)throw new Error("Type a message before sending.");
+  const uid=socialUserId(),senderUsername=state.username||currentUser?.displayName||"Player";
+  const message={memberIds:[uid,friend.uid].sort(),senderUid:uid,senderUsername,recipientUid:friend.uid,recipientUsername:friend.username||"Friend",body:clean};
+  if(LOCAL_TEST_MODE||!firebaseReady||!currentUser||currentUser.__local){
+    socialCache.messages=[{id:"local-message-"+Date.now(),friendUid:friend.uid,createdAtIso:new Date().toISOString(),...message},...(socialCache.messages||[])];
+    saveLocalSocial();
+    return;
+  }
+  await fb.addDoc(fb.collection(db,"friendMessages"),{...message,createdAt:fb.serverTimestamp()});
+}
+function messageRowsMarkup(messages=[]){
+  const uid=socialUserId();
+  return messages.map(m=>`<div class="messageRow ${m.senderUid===uid?"isMine":""}"><strong>${esc(m.senderUid===uid?"You":(m.senderUsername||"Friend"))}</strong><span>${esc(m.body||"")}</span></div>`).join("")||`<p>No messages yet.</p>`;
+}
+async function openFriendMessage(friend,msg=""){
+  if(!friend?.uid)return;
+  closeCard();
+  const d=stageCard(`<h2>Message ${esc(friend.username||"Friend")}</h2>${msg?`<p class="authError">${esc(msg)}</p>`:""}<div id="friendMessageThread" class="messageThread"><p>Loading messages...</p></div><textarea id="friendMessageBody" rows="3" placeholder="Type a message"></textarea><button id="sendFriendMessage">Send Message</button><button id="backToInviteFriends">Back To Friends</button>`,"stageCard profileCard friendMessageCard",d=>{
+    d.querySelector("#sendFriendMessage").onclick=async()=>{try{await sendFriendMessage(friend,d.querySelector("#friendMessageBody").value);openFriendMessage(friend,"Message sent.");}catch(e){openFriendMessage(friend,e.message||"Could not send that message.");}};
+    d.querySelector("#backToInviteFriends").onclick=()=>{closeCard();openInviteFriends();};
+  });
+  try{
+    const messages=await loadFriendMessages(friend.uid);
+    if(d.isConnected)d.querySelector("#friendMessageThread").innerHTML=messageRowsMarkup(messages);
+  }catch(e){
+    if(d.isConnected)d.querySelector("#friendMessageThread").innerHTML=`<p>${esc(e.message||"Could not load messages.")}</p>`;
+  }
+}
 async function loadSocialData(){
   if(!appSessionActive())return {friends:[],meetups:[],friendRequests:[],sentFriendRequests:[]};
   const uid=socialUserId();
@@ -1632,7 +1758,7 @@ async function openInviteFriends(msg="",mode="friends"){
     const data=await loadSocialData();
     const friends=data.friends||[],meetups=visibleMeetupPlans(data.meetups||[]),friendRequests=data.friendRequests||[],sentFriendRequests=data.sentFriendRequests||[];
     const venueOptions=routeVenues().map(v=>`<option value="${esc(v.id)}">${esc(v.name)}</option>`).join("");
-    const friendRows=friends.map(f=>`<div class="socialRow"><strong>${esc(f.username||"Friend")}</strong><span>${Number(f.completedVehicles||0)} vehicles restored · ${Number(f.totalPartsRestored||0)} components restored</span></div>`).join("")||`<p>No friends linked yet.</p>`;
+    const friendRows=friends.map(f=>`<div class="socialRow socialFriend"><button type="button" class="friendRemoveButton" data-remove-friend="${esc(f.uid)}" aria-label="Remove ${esc(f.username||"Friend")}">×</button><strong>${esc(f.username||"Friend")}</strong><span>${Number(f.completedVehicles||0)} vehicles restored · ${Number(f.totalPartsRestored||0)} components restored</span><div class="socialFriendActions"><button type="button" data-message-friend="${esc(f.uid)}">Message</button></div></div>`).join("")||`<p>No friends linked yet.</p>`;
     const friendChoices=friends.map(f=>`<label class="meetupFriendChoice"><input data-meetup-friend type="checkbox" value="${esc(f.uid)}"><span>${esc(f.username||"Friend")}</span></label>`).join("");
     const requestRows=friendRequests.map(r=>`<div class="socialRow socialRequest"><strong>${esc(r.username||"Friend")}</strong><span>Wants to connect on The Restoration Route.</span><div><button data-friend-request="${esc(r.id)}" data-action="accept">Accept</button><button data-friend-request="${esc(r.id)}" data-action="reject">Reject</button></div></div>`).join("");
     const sentRows=sentFriendRequests.map(r=>`<div class="socialRow"><strong>${esc(r.username||"Friend")}</strong><span>Request sent.</span></div>`).join("");
@@ -1656,6 +1782,8 @@ async function openInviteFriends(msg="",mode="friends"){
     const send=d.querySelector("#sendMeetupPlan");
     if(send)send.onclick=async()=>{try{const friendIds=[...d.querySelectorAll("[data-meetup-friend]:checked")].map(x=>x.value);await saveMeetupPlan(friendIds,d.querySelector("#meetupVenue").value,d.querySelector("#meetupDate").value,d.querySelector("#meetupTime").value,d.querySelector("#meetupNote").value);refreshMenuSocialSummary();closeCard();openSuggestMeetup("Meet-up suggestion saved.");}catch(e){closeCard();openSuggestMeetup(e.message||"Could not save that meet-up.");}};
     d.querySelectorAll("[data-friend-request]").forEach(b=>b.onclick=async()=>{await respondToFriendRequest(b.dataset.friendRequest,b.dataset.action==="accept");refreshMenuSocialSummary();closeCard();openInviteFriends(b.dataset.action==="accept"?"Friend request accepted.":"Friend request rejected.");});
+    d.querySelectorAll("[data-remove-friend]").forEach(b=>b.onclick=()=>{const friend=friends.find(f=>f.uid===b.dataset.removeFriend);if(friend)confirmRemoveFriend(friend);});
+    d.querySelectorAll("[data-message-friend]").forEach(b=>b.onclick=()=>{const friend=friends.find(f=>f.uid===b.dataset.messageFriend);if(friend)openFriendMessage(friend);});
     d.querySelectorAll("[data-plan-status]").forEach(b=>b.onclick=async()=>{await updateMeetupStatus(b.dataset.planStatus,b.dataset.status);refreshMenuSocialSummary();closeCard();openInviteFriends(`Meet-up ${b.dataset.status}.`,mode);});
     d.querySelectorAll("[data-calendar-plan]").forEach(b=>b.onclick=async()=>{try{await addPlanToCalendar(b.dataset.calendarPlan);}catch(e){closeCard();openInviteFriends(e.message||"Could not add that meet-up to your calendar.",mode);}});
   }catch(e){
