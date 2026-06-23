@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "public-2026-05-24-self-updating-auth-scanner-layout";
+const APP_BUILD = "venue-ui-2026-06-23-v11";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -122,6 +122,14 @@ function activateRememberedSession(){
   currentUser={uid:state.uid,email:rememberedEmail(),emailVerified:!!state.emailVerified,__local:true};
   return true;
 }
+function restoreRememberedSession(){
+  if(!activateRememberedSession())return false;
+  closeAuthPanel();
+  renderHome();
+  setTimeout(setScales,80);
+  if(previewMode())openPreviewFromUrl();
+  return true;
+}
 function defaultAuthMode(){return rememberedEmail()?"login":"register";}
 let activeScannerStream=null, activeScannerTimer=null, scannerProcessing=false;
 let hornTapTimes=[], hornHoldTimer=null, hornStopTimer=null, hornSource=null, hornGain=null, hornAudioContext=null, hornBuffer=null, hornFallbackAudio=null, hornPressStartedAt=0, hornPressed=false;
@@ -131,7 +139,8 @@ const BOOK_ASPECT=1122/1402;
 const BOOK_ART_FRAME={x:-32+(452-(493*BOOK_ASPECT))/2,y:183,w:493*BOOK_ASPECT,h:493};
 const VENUE_SOURCE_FRAME={x:0,y:(844-(390/BOOK_ASPECT))/2,w:390,h:390/BOOK_ASPECT};
 const TAB_ORDER=["directory","piston-club","mr-watsons","gilks-garage","oily-rag","long-itch-diner","pats-baps","seven-mile","the-man-cave"];
-const VENUE_PAGE_BY_ID={"piston-club":"venue1","mr-watsons":"venue2","gilks-garage":"venue3","oily-rag":"venue4","long-itch-diner":"venue5","pats-baps":"venue6","seven-mile":"venue7","the-man-cave":"venue8"};
+const MENU_LOGO_ASSET="assets/trr_logo_menu.png";
+const HOME_MENU_LOGO={type:"image",name:"Restoration Route Menu Logo",src:MENU_LOGO_ASSET,x:80,y:76,w:248,h:62,r:0,opacity:1,z:35,className:"menuLogoLayer"};
 
 function baseRepaired(){ const r={}; DATA.venues.forEach(v=>r[v.id]=false); return r; }
 function defaultState(){
@@ -178,6 +187,7 @@ async function initFirebase(){
     renderHome();
     return;
   }
+  restoreRememberedSession();
   try{
     const {initializeApp}=await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js");
     const authMod=await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js");
@@ -213,14 +223,7 @@ async function initFirebase(){
         if(previewMode())openPreviewFromUrl();
         else if(!layoutMode()&&(!state.username||!state.termsAccepted)) openAuthPanel("complete");
       }else{
-        if(hasRememberedAccount()){
-          activateRememberedSession();
-          closeAuthPanel();
-          renderHome();
-          setTimeout(setScales,80);
-          if(previewMode())openPreviewFromUrl();
-          return;
-        }
+        if(restoreRememberedSession())return;
         renderHome();
         setTimeout(setScales,80);
         if(previewMode())openPreviewFromUrl();
@@ -231,7 +234,7 @@ async function initFirebase(){
   }catch(e){
     renderHome();
     setTimeout(setScales,80);
-    if(hasRememberedAccount()){activateRememberedSession();closeAuthPanel();renderHome(); if(previewMode())openPreviewFromUrl(); return;}
+    if(restoreRememberedSession())return;
     if(previewMode())openPreviewFromUrl();
     else if(IS_FILE_PREVIEW)showFilePreviewNotice();
     else if(!layoutMode())openAuthPanel(defaultAuthMode(),"Firebase could not load or could not enable remembered sign-in. Check Firebase setup/internet.");
@@ -267,7 +270,6 @@ function stableSrc(src,name=""){if(DATA.tabAssetOverrides&&DATA.tabAssetOverride
     if(n.includes("man cave")&&n.includes("tab button"))return DATA.assets.manCaveTab;
     if(n.includes("engine_damaged"))return DATA.components.engine.broken;
     if(n.includes("engine_repaired"))return DATA.components.engine.fixed;
-    if(n.includes("venue 1 ui"))return DATA.assets.venue1;
     if(n.includes("garage directory ui"))return DATA.assets.directory;
     return "";
   }
@@ -476,6 +478,7 @@ function imgLayer(stage,l,override){
     d.dataset.liveLayerSource=l.src||src||"";
   }
   d.style.setProperty("--rotate",(l.r||0)+"deg");
+  if(l.className)String(l.className).split(/\s+/).filter(Boolean).forEach(c=>d.classList.add(c));
   Object.assign(d.style,{left:l.x+"px",top:l.y+"px",width:l.w+"px",height:l.h+"px",opacity:l.opacity??1,zIndex:l.z??1,transform:"translateY(var(--lift, 0px)) rotate(var(--rotate, 0deg))"});
   const i=document.createElement("img");i.src=src;i.alt=l.name||"";d.appendChild(i);stage.appendChild(d);return d;
 }
@@ -485,7 +488,7 @@ function textLayer(stage,l,t){
   const d=document.createElement("div");
   d.className="textLayer"+(l.className?" "+l.className:"");
   const fontSize=fitFontSize(box,t,box.fontSize||12);
-  Object.assign(d.style,{left:box.x+"px",top:box.y+"px",width:box.w+"px",height:box.h+"px",opacity:l.opacity??1,zIndex:l.z??10,fontSize:fontSize+"px",color:l.color||"#0a3156",transform:`rotate(${l.r||0}deg)`,textAlign:l.align||"center",justifyContent:l.align==="left"?"flex-start":"center",alignItems:l.valign||"center",fontWeight:l.fontWeight||800});
+  Object.assign(d.style,{left:box.x+"px",top:box.y+"px",width:box.w+"px",height:box.h+"px",opacity:l.opacity??1,zIndex:l.z??10,fontSize:fontSize+"px",lineHeight:l.lineHeight||1.02,color:l.color||"#0a3156",transform:`rotate(${l.r||0}deg)`,textAlign:l.align||"center",justifyContent:l.align==="left"?"flex-start":"center",alignItems:l.valign||"center",fontWeight:l.fontWeight||800});
   if(layoutMode()){
     ensureLayoutEditor();
     d.classList.add("layoutGuide");
@@ -557,14 +560,15 @@ function renderHome(){
     if(n.includes("banter box"))hit(st,l.x,l.y,l.w,l.h,openBanter,"Banter",layer);
     if(n.includes("horn"))hornHit(st,l.x,l.y,l.w,l.h,layer);
   });
-  hit(st,82,58,230,70,()=>{if(requireLogin())openMenu()},"Menu");
+  const logoLayer=imgLayer(st,HOME_MENU_LOGO,MENU_LOGO_ASSET);
+  hit(st,80,66,248,84,()=>{if(requireLogin())openMenu()},"Menu",logoLayer);
   homeRoot.appendChild(st);
   if(editorMode())setTimeout(ensureLiveEditor,0);
   setTimeout(maybeShowRouteComplete,80);
 }
 function popupStage(cls="popupStage"){overlayRoot.innerHTML="";const sh=document.createElement("div");sh.className="popupShell";const st=makeStage(cls);st.dataset.editorScreen=cls.includes("repairStage")?"repair":cls.includes("menuStage")?"menu":cls.includes("pageStage")?"page":"popup";sh.appendChild(st);overlayRoot.appendChild(sh);if(editorMode())setTimeout(ensureLiveEditor,0);return st;}
 function closePopup(){overlayRoot.innerHTML="";}
-function openMenu(){const st=popupStage("menuStage");st.dataset.editorScreen="menu";const menuLayers=new Map();DATA.layout.menu.layers.forEach(l=>{if(l.type==="image")menuLayers.set(l,imgLayer(st,l))});let taps=0;const x=document.createElement("button");x.className="closeX";x.textContent="×";x.onclick=()=>taps>=5?openAdmin():closePopup();st.appendChild(x);hit(st,82,58,230,70,()=>{taps++;setTimeout(()=>taps=0,1800)},"Admin tap");DATA.layout.menu.layers.filter(l=>l.type==="image"&&!l.name.toLowerCase().includes("menu ui")).forEach(l=>{const n=l.name.toLowerCase(),layer=menuLayers.get(l);if(n.includes("profile"))hit(st,l.x,l.y,l.w,l.h,openProfile,"Profile",layer);else if(n.includes("leaderboard"))hit(st,l.x,l.y,l.w,l.h,openLeaderboard,"Leaderboard",layer);else if(n.includes("issues"))hit(st,l.x,l.y,l.w,l.h,openIssues,"Issues",layer);else if(n.includes("log out"))hit(st,l.x,l.y,l.w,l.h,openLogout,"Logout",layer);});}
+function openMenu(){const st=popupStage("menuStage");st.dataset.editorScreen="menu";const menuLayers=new Map();DATA.layout.menu.layers.forEach(l=>{if(l.type==="image")menuLayers.set(l,imgLayer(st,l))});let taps=0;const x=document.createElement("button");x.className="closeX";x.textContent="×";x.setAttribute("aria-label","Close Menu");x.onclick=closePopup;st.appendChild(x);hit(st,318,36,66,66,closePopup,"Close Menu");hit(st,38,50,314,98,closePopup,"Close Menu");hit(st,0,0,46,46,()=>{taps++;if(taps>=5)openAdmin();setTimeout(()=>taps=0,1800)},"Admin tap");DATA.layout.menu.layers.filter(l=>l.type==="image"&&!l.name.toLowerCase().includes("menu ui")).forEach(l=>{const n=l.name.toLowerCase(),layer=menuLayers.get(l);if(n.includes("profile"))hit(st,l.x,l.y,l.w,l.h,openProfile,"Profile",layer);else if(n.includes("leaderboard"))hit(st,l.x,l.y,l.w,l.h,openLeaderboard,"Leaderboard",layer);else if(n.includes("issues"))hit(st,l.x,l.y,l.w,l.h,openIssues,"Issues",layer);else if(n.includes("log out"))hit(st,l.x,l.y,l.w,l.h,openLogout,"Logout",layer);});}
 function bookHome(st){const r=DATA.layout.directory.layers.find(l=>l.name.toLowerCase().includes("home button")); if(r){imgLayer(st,r,DATA.assets.homeButton);hit(st,r.x,r.y,r.w,r.h,closePopup,"Home");}}
 function tabLayerMap(){
   const layers=DATA.layout.directory.layers.filter(l=>l.type==="image"&&l.name.toLowerCase().includes("tab button"));
@@ -584,8 +588,9 @@ function tabLayerMap(){
   return map;
 }
 function tabs(st,current="directory"){
-  const layers=tabLayerMap(), start=Math.max(0,TAB_ORDER.indexOf(current));
-  TAB_ORDER.slice(start).forEach(id=>{
+  const layers=tabLayerMap();
+  const visibleTabs=current==="directory"?TAB_ORDER:TAB_ORDER.filter(id=>id!=="directory");
+  visibleTabs.forEach(id=>{
     const l=layers[id];
     if(!l)return;
     imgLayer(st,l,stableSrc(l.src,l.name));
@@ -619,7 +624,7 @@ function shortName(n){return n.replace("The Piston Club","PISTON\nCLUB").replace
 function wrap(t,max,lines){const words=String(t).split(/\s+/),out=[];let line="";words.forEach(w=>{const test=line?line+" "+w:w;if(test.length>max&&line){out.push(line);line=w}else line=test});if(line)out.push(line);while(out.length<lines)out.push("");return out.slice(0,lines);}
 function mapsDirectionsUrl(v){return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent((v.address||[]).filter(Boolean).join(", ")||v.name)}`;}
 function openDirections(v){window.open(mapsDirectionsUrl(v),"_blank","noopener");}
-function openVenue(id){const v=venueById(id);if(!v)return;const st=popupStage();st.dataset.editorScreen="venueTemplate";st.dataset.editorVenue=id;const bg={...BOOK_ART_FRAME,r:0,opacity:1,z:0,name:"Venue UI"};imgLayer(st,bg,DATA.assets[VENUE_PAGE_BY_ID[id]||v.page]);drawVenue(st,v);bookHome(st);tabs(st,id);}
+function openVenue(id){const v=venueById(id);if(!v)return;const st=popupStage();st.dataset.editorScreen="venueTemplate";st.dataset.editorVenue=id;const bg={...BOOK_ART_FRAME,r:0,opacity:1,z:0,name:"Venue UI"};imgLayer(st,bg,DATA.assets.venue1);drawVenue(st,v);bookHome(st);tabs(st,id);}
 function drawVenue(st,v){
   const tl=DATA.layout.venueTemplate.layers.filter(l=>l.type==="text"),
     img=mapVenueLayer(DATA.layout.venueTemplate.layers.find(l=>l.type==="image"&&l.name.toLowerCase().includes("exhaust broken"))||{x:41,y:337,w:121,h:97,r:0,opacity:1,z:3}),
@@ -629,16 +634,20 @@ function drawVenue(st,v){
   imgLayer(st,img,state.repaired[v.id]?DATA.components[v.key].fixed:DATA.components[v.key].broken);
   if(state.repaired[v.id])imgLayer(st,stamp,DATA.assets.repairStamp);
   const exact=n=>tl.filter(l=>l.name.startsWith(n)).sort((a,b)=>a.y-b.y);
-  const line=l=>{const m=mapVenueLayer(l);return {...m,fontSize:Math.min(m.fontSize||7,4.8),align:"left",fontWeight:700};};
-  exact("Summary Text Location").slice(0,4).forEach((l,i)=>textLayer(st,{...line(l),layoutKey:`venue:${v.id}:summary:${i}`,layoutName:`${v.name} summary ${i+1}`},v.summary[i]||""));
-  exact("Address Text Location").slice(0,3).forEach((l,i)=>textLayer(st,{...line(l),layoutKey:`venue:${v.id}:address:${i}`,layoutName:`${v.name} address ${i+1}`},v.address[i]||""));
-  exact("Food Hours").slice(0,7).forEach((l,i)=>textLayer(st,{...line(l),layoutKey:`venue:${v.id}:food:${i}`,layoutName:`${v.name} food ${i+1}`},v.food[i]||""));
-  exact("Opening Hours").slice(0,7).forEach((l,i)=>textLayer(st,{...line(l),layoutKey:`venue:${v.id}:opening:${i}`,layoutName:`${v.name} opening ${i+1}`},v.opening[i]||""));
-  exact("Notes Line").slice(0,3).forEach((l,i)=>textLayer(st,{...line(l),layoutKey:`venue:${v.id}:notes:${i}`,layoutName:`${v.name} notes ${i+1}`},v.notes[i]||""));
+  const line=(l,opts={})=>{const m=mapVenueLayer(l),h=Math.max(m.h||10,opts.h||12);return {...m,y:m.y+(opts.dy||0),h,fontSize:opts.fontSize||6.8,align:"left",valign:"flex-end",fontWeight:opts.fontWeight||800,lineHeight:opts.lineHeight||.94};};
+  const flow=(prefix,layers,values,maxChars,opts={})=>{
+    const text=Array.isArray(values)?values.filter(Boolean).join(" "):String(values||"");
+    wrap(text,maxChars,layers.length).forEach((t,i)=>layers[i]&&textLayer(st,{...line(layers[i],opts),layoutKey:`venue:${v.id}:${prefix}:${i}`,layoutName:`${v.name} ${prefix} ${i+1}`},t));
+  };
+  flow("summary",exact("Summary Text Location").slice(0,4),v.summary,36,{fontSize:6.4,h:12,dy:1});
+  flow("address",exact("Address Text Location").slice(0,3),v.address,34,{fontSize:6.4,h:12,dy:5});
+  exact("Food Hours").slice(0,7).forEach((l,i)=>textLayer(st,{...line(l,{fontSize:6.6,h:11,dy:6}),layoutKey:`venue:${v.id}:food:${i}`,layoutName:`${v.name} food ${i+1}`},v.food[i]||""));
+  exact("Opening Hours").slice(0,7).forEach((l,i)=>textLayer(st,{...line(l,{fontSize:6.6,h:11,dy:6}),layoutKey:`venue:${v.id}:opening:${i}`,layoutName:`${v.name} opening ${i+1}`},v.opening[i]||""));
+  flow("notes",exact("Notes Line").slice(0,3),v.notes,52,{fontSize:6.4,h:12,dy:7});
   const website=tl.find(l=>l.name==="Website Address"),phone=tl.find(l=>l.name==="Phone Number"),email=tl.find(l=>l.name==="Email Address");
-  if(website)textLayer(st,{...line(website),layoutKey:`venue:${v.id}:website`,layoutName:`${v.name} website`},v.website||"To confirm");
-  if(phone)textLayer(st,{...line(phone),layoutKey:`venue:${v.id}:phone`,layoutName:`${v.name} phone`},v.phone||"To confirm");
-  if(email)textLayer(st,{...line(email),layoutKey:`venue:${v.id}:email`,layoutName:`${v.name} email`},v.email||"To confirm");
+  if(website)textLayer(st,{...line(website,{fontSize:7.2,h:14,dy:3}),layoutKey:`venue:${v.id}:website`,layoutName:`${v.name} website`},v.website||"To confirm");
+  if(phone)textLayer(st,{...line(phone,{fontSize:7.2,h:14,dy:3}),layoutKey:`venue:${v.id}:phone`,layoutName:`${v.name} phone`},v.phone||"To confirm");
+  if(email)textLayer(st,{...line(email,{fontSize:7.2,h:14,dy:3}),layoutKey:`venue:${v.id}:email`,layoutName:`${v.name} email`},v.email||"To confirm");
   hit(st,stamp.x,stamp.y,stamp.w,stamp.h,()=>state.repaired[v.id]?null:card(`<h2>Scan To Restore</h2><p>Scan this venue’s private route code to restore ${esc(v.component)}.</p><button data-close>Close</button>`),"Repair");
 }
 

@@ -1,4 +1,4 @@
-const APP_BUILD = "venue-ui-2026-06-19-v3";
+const APP_BUILD = "venue-ui-2026-06-23-v11";
 const CACHE = "restoration-route-public-static-" + APP_BUILD;
 const ASSETS = [
   'index.html',
@@ -9,14 +9,8 @@ const ASSETS = [
   'manifest.webmanifest',
   'firestore.rules',
   'assets/8_venue_assets_garage_directory_ui.webp',
-  'assets/8_venue_assets_venue_1_ui.webp',
-  'assets/8_venue_assets_venue_2_ui.webp',
-  'assets/8_venue_assets_venue_3_ui.webp',
-  'assets/8_venue_assets_venue_4_ui.webp',
-  'assets/8_venue_assets_venue_5_ui.webp',
-  'assets/8_venue_assets_venue_6_ui.webp',
-  'assets/8_venue_assets_venue_7_ui.webp',
-  'assets/8_venue_assets_venue_8_ui.webp',
+  'assets/8_venue_assets_venue_1_ui.jpg',
+  'assets/trr_logo_menu.png',
   'assets/Repair Transition Animation.webm',
   'assets/banter_box.webp',
   'assets/component_assets_exhaust_broken.png',

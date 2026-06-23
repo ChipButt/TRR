@@ -10,6 +10,8 @@ button{font:inherit}
   --lift:-4px;
   filter:drop-shadow(0 0 9px rgba(246,223,170,.8)) drop-shadow(0 7px 9px rgba(0,0,0,.42));
 }
+.imageLayer.menuLogoLayer img{object-fit:fill}
+.imageLayer.menuLogoLayer.interactiveImage.isHover{--lift:-2px}
 .layer img{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none}
 .textLayer{position:absolute;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.02;font-weight:800;color:#0a3156;white-space:pre-wrap;overflow:hidden;text-transform:none}
 .directoryDirectionsText{text-decoration:underline;text-underline-offset:1px;cursor:pointer}
@@ -26,8 +28,8 @@ button{font:inherit}
 .popupStage{position:relative;transform:scale(var(--popupScale));transform-origin:center center}
 .menuStage{position:relative;transform:scale(var(--menuScale));transform-origin:center center}
 .scannerStage{left:50%;top:50%;transform:translate(-50%,-50%) scale(var(--scannerScale));background:#000}
-.closeX{position:absolute;right:14px;top:14px;z-index:900;border:0;background:transparent;color:#b86b62;font-family:Georgia,'Times New Roman',serif;font-weight:900;font-size:34px;line-height:1;text-shadow:0 1px 0 rgba(255,255,255,.55),0 2px 4px rgba(0,0,0,.28);cursor:pointer}
-.popCard{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:1000;width:min(88vw,420px);background:#efe0bd;border:2px solid #0a3156;border-radius:18px;color:#0a3156;padding:18px;box-shadow:0 18px 50px rgba(0,0,0,.55);font-family:Georgia,'Times New Roman',serif}
+.closeX{position:absolute;right:22px;top:44px;width:38px;height:38px;z-index:900;display:flex;align-items:center;justify-content:center;border:0;background:transparent;color:#0a3156;font-family:Georgia,'Times New Roman',serif;font-weight:900;font-size:32px;line-height:1;text-shadow:0 1px 0 rgba(255,255,255,.55),0 2px 4px rgba(0,0,0,.24);cursor:pointer}
+.popCard{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:1000;width:min(88vw,420px);background:#efe0bd;border:2px solid #0a3156;border-radius:18px;color:#0a3156;padding:18px;box-shadow:0 18px 50px rgba(0,0,0,.55);font-family:Georgia,'Times New Roman',serif;pointer-events:auto}
 .popCard h2{margin:0 0 10px;font-size:26px}
 .popCard p{line-height:1.35}
 .popCard input,.popCard textarea{width:100%;border:1px solid #0a3156;background:#fff8df;color:#0a3156;border-radius:9px;padding:9px;margin:8px 0}
