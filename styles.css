@@ -602,9 +602,12 @@ button{font:inherit}
   display:grid;
   gap:6px;
   margin:6px 0 8px;
-  min-height:111px;
-  max-height:150px;
-  overflow:auto;
+  height:124px;
+  min-height:124px;
+  max-height:124px;
+  align-content:start;
+  overflow-x:hidden;
+  overflow-y:auto;
   padding-right:3px;
   -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain;
@@ -616,9 +619,12 @@ button{font:inherit}
   border:1px solid rgba(10,49,86,.32);
   background:rgba(255,248,223,.58);
   border-radius:8px;
-  padding:7px 8px;
+  height:32px;
+  min-height:32px;
+  padding:5px 8px;
   font-size:13px;
   font-weight:900;
+  line-height:1;
 }
 .popCard.inviteFriendsCard .meetupFriendChoice[hidden]{
   display:none;
