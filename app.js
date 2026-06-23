@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "venue-ui-2026-06-23-v29";
+const APP_BUILD = "venue-ui-2026-06-23-v31";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -1534,6 +1534,65 @@ function planTimeValue(p){
   const date=new Date(`${p.suggestedDate}T${p.suggestedTime||"00:00"}`);
   return Number.isFinite(date.getTime())?date.getTime():Number.MAX_SAFE_INTEGER;
 }
+function normalizeMeetupDate(value){
+  const raw=String(value||"").trim();
+  if(!raw)return "";
+  let y,m,d;
+  let match=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(raw);
+  if(match){y=Number(match[1]);m=Number(match[2]);d=Number(match[3]);}
+  else{
+    match=/^(\d{1,2})[\/.\-\s](\d{1,2})[\/.\-\s](\d{2,4})$/.exec(raw);
+    if(!match)throw new Error("Enter the meet-up date as DD/MM/YYYY.");
+    d=Number(match[1]);m=Number(match[2]);y=Number(match[3]);
+    if(y<100)y+=2000;
+  }
+  const dt=new Date(y,m-1,d);
+  if(dt.getFullYear()!==y||dt.getMonth()!==m-1||dt.getDate()!==d)throw new Error("Enter a valid meet-up date.");
+  return `${String(y).padStart(4,"0")}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+}
+function normalizeMeetupTime(value){
+  const raw=String(value||"").trim();
+  if(!raw)return "";
+  const compact=raw.replace(/\s+/g,"");
+  let h,min,match=/^(\d{1,2})[:.](\d{2})$/.exec(compact);
+  if(match){h=Number(match[1]);min=Number(match[2]);}
+  else{
+    match=/^(\d{3,4})$/.exec(compact);
+    if(!match)throw new Error("Enter the meet-up time as HH:MM.");
+    const digits=match[1].padStart(4,"0");
+    h=Number(digits.slice(0,2));min=Number(digits.slice(2));
+  }
+  if(h<0||h>23||min<0||min>59)throw new Error("Enter a valid meet-up time.");
+  return `${String(h).padStart(2,"0")}:${String(min).padStart(2,"0")}`;
+}
+function meetupPickerMarkup({id,label,value="",text,options,extraClass=""}){
+  return `<div class="meetupPicker ${extraClass}" data-meetup-picker="${esc(id)}"><input id="${esc(id)}" data-meetup-${esc(id.replace(/^meetup/,"").toLowerCase())} type="hidden" value="${esc(value)}"><button type="button" id="${esc(id)}Button" class="meetupPickerButton" aria-expanded="false">${esc(text||label)}</button><div id="${esc(id)}Options" class="meetupOptionList" hidden>${options}</div></div>`;
+}
+function meetupDateOptionsMarkup(days=90){
+  const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const weekdays=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const today=new Date();
+  today.setHours(12,0,0,0);
+  const pad=n=>String(n).padStart(2,"0");
+  return Array.from({length:days},(_,i)=>{
+    const d=new Date(today);
+    d.setDate(today.getDate()+i);
+    const value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    const prefix=i===0?"Today":i===1?"Tomorrow":weekdays[d.getDay()];
+    const label=`${prefix}, ${d.getDate()} ${months[d.getMonth()]}`;
+    return `<button type="button" class="meetupOption" data-meetup-picker-option data-value="${esc(value)}" data-label="${esc(label)}">${esc(label)}</button>`;
+  }).join("");
+}
+function meetupTimeOptionsMarkup(){
+  const out=[];
+  for(let h=0;h<24;h++){
+    for(const m of [0,30]){
+      const value=`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+      out.push(`<button type="button" class="meetupOption" data-meetup-picker-option data-value="${value}" data-label="${value}">${value}</button>`);
+    }
+  }
+  return out.join("");
+}
 function visibleMeetupPlans(meetups=[]){
   return [...meetups].filter(p=>{
     const response=currentPlanResponse(p);
@@ -1785,14 +1844,19 @@ async function openInviteFriends(msg="",mode="friends"){
   try{
     const data=await loadSocialData();
     const friends=data.friends||[],meetups=visibleMeetupPlans(data.meetups||[]),friendRequests=data.friendRequests||[],sentFriendRequests=data.sentFriendRequests||[];
-    const venueOptions=routeVenues().map((v,i)=>`<option value="${esc(v.id)}" ${i===0?"selected":""}>${esc(v.name)}</option>`).join("");
+    const venues=routeVenues();
+    const venueOptions=venues.map(v=>`<button type="button" class="meetupOption" data-meetup-picker-option data-value="${esc(v.id)}" data-label="${esc(v.name)}">${esc(v.name)}</button>`).join("");
+    const firstVenue=venues[0]||{};
+    const venuePicker=meetupPickerMarkup({id:"meetupVenue",label:"Choose venue",value:firstVenue.id||"",text:firstVenue.name||"Choose venue",options:venueOptions});
+    const datePicker=meetupPickerMarkup({id:"meetupDate",label:"Choose date",options:meetupDateOptionsMarkup(),extraClass:"meetupDatePicker"});
+    const timePicker=meetupPickerMarkup({id:"meetupTime",label:"Choose time",options:meetupTimeOptionsMarkup(),extraClass:"meetupTimePicker"});
     const friendRows=friends.map(f=>`<div class="socialRow socialFriend"><button type="button" class="friendRemoveButton" data-remove-friend="${esc(f.uid)}" aria-label="Remove ${esc(f.username||"Friend")}">×</button><strong>${esc(f.username||"Friend")}</strong><span>${Number(f.completedVehicles||0)} vehicles restored · ${Number(f.totalPartsRestored||0)} components restored</span></div>`).join("")||`<p>No friends linked yet.</p>`;
     const friendChoices=friends.map(f=>`<label class="meetupFriendChoice" data-meetup-friend-choice data-friend-name="${esc(String(f.username||"Friend").toLowerCase())}"><input data-meetup-friend type="checkbox" value="${esc(f.uid)}"><span>${esc(f.username||"Friend")}</span></label>`).join("");
     const requestRows=friendRequests.map(r=>`<div class="socialRow socialRequest"><strong>${esc(r.username||"Friend")}</strong><span>Wants to connect on The Restoration Route.</span><div><button data-friend-request="${esc(r.id)}" data-action="accept">Accept</button><button data-friend-request="${esc(r.id)}" data-action="reject">Reject</button></div></div>`).join("");
     const sentRows=sentFriendRequests.map(r=>`<div class="socialRow"><strong>${esc(r.username||"Friend")}</strong><span>Request sent.</span></div>`).join("");
     const body=d.querySelector("#inviteFriendsBody");
     const inviteMarkup=`<div class="friendSearch"><input id="friendUsernameSearch" autocomplete="off" placeholder="Username"><button id="friendSearchButton">Send Request</button></div>${requestRows?`<h3>Friend Requests</h3><div class="socialRows">${requestRows}</div>`:""}${sentRows?`<h3>Sent Requests</h3><div class="socialRows">${sentRows}</div>`:""}<h3>Linked Friends</h3><div class="socialRows">${friendRows}</div>`;
-    const meetupMarkup=friends.length?`<div class="meetupFriendPicker"><input id="meetupFriendSearch" autocomplete="off" placeholder="Search linked friends"><div id="meetupFriendCount" class="meetupFriendCount">${friends.length} linked friend${friends.length===1?"":"s"} available</div><div class="meetupFriendChoices">${friendChoices}</div><p id="meetupFriendEmpty" class="meetupFriendEmpty" hidden>No linked friends match that search.</p></div><h3>Venue</h3><select id="meetupVenue" data-meetup-venue aria-label="Meet-up venue">${venueOptions}</select><div class="meetupWhen"><input id="meetupDate" type="date" aria-label="Meet-up date"><input id="meetupTime" type="time" aria-label="Meet-up time"></div><textarea id="meetupNote" rows="2" placeholder="Message or meet-up details"></textarea><button id="sendMeetupPlan">Send Suggestion</button>`:`<p>Add a friend before suggesting a meet-up.</p>`;
+    const meetupMarkup=friends.length?`<div class="meetupFriendPicker"><input id="meetupFriendSearch" autocomplete="off" placeholder="Search linked friends"><div id="meetupFriendCount" class="meetupFriendCount">${friends.length} linked friend${friends.length===1?"":"s"} available</div><div class="meetupFriendChoices">${friendChoices}</div><p id="meetupFriendEmpty" class="meetupFriendEmpty" hidden>No linked friends match that search.</p></div><h3>Venue</h3>${venuePicker}<h3>Date & Time</h3><div class="meetupWhen">${datePicker}${timePicker}</div><textarea id="meetupNote" rows="2" placeholder="Message or meet-up details"></textarea><button id="sendMeetupPlan">Send Suggestion</button>`:`<p>Add a friend before suggesting a meet-up.</p>`;
     body.innerHTML=mode==="meetup"?`<h3>Friends</h3>${meetupMarkup}`:inviteMarkup;
     const meetupFriendSearch=d.querySelector("#meetupFriendSearch"),meetupFriendCount=d.querySelector("#meetupFriendCount"),meetupFriendEmpty=d.querySelector("#meetupFriendEmpty"),meetupFriendChoices=[...d.querySelectorAll("[data-meetup-friend-choice]")];
     const syncMeetupFriendPicker=()=>{
@@ -1814,8 +1878,26 @@ async function openInviteFriends(msg="",mode="friends"){
     syncMeetupFriendPicker();
     const friendSearchButton=d.querySelector("#friendSearchButton");
     if(friendSearchButton)friendSearchButton.onclick=async()=>{try{const target=await addFriendByUsername(d.querySelector("#friendUsernameSearch").value);refreshMenuSocialSummary();closeCard();openInviteFriends(target.accepted?`${target.username} is now in your friends list.`:`Friend request sent to ${target.username}.`);}catch(e){closeCard();openInviteFriends(e.message||"Could not add that friend.");}};
+    d.querySelectorAll("[data-meetup-picker]").forEach(picker=>{
+      const input=picker.querySelector("input"),button=picker.querySelector(".meetupPickerButton"),list=picker.querySelector(".meetupOptionList");
+      if(!input||!button||!list)return;
+      button.onclick=()=>{
+        const opening=list.hidden;
+        d.querySelectorAll(".meetupOptionList").forEach(l=>{if(l!==list)l.hidden=true;});
+        d.querySelectorAll(".meetupPickerButton").forEach(b=>{if(b!==button)b.setAttribute("aria-expanded","false");});
+        list.hidden=!opening;
+        button.setAttribute("aria-expanded",String(opening));
+      };
+      list.querySelectorAll("[data-meetup-picker-option]").forEach(option=>option.onclick=()=>{
+        input.value=option.dataset.value||"";
+        button.textContent=option.dataset.label||option.textContent||button.textContent;
+        list.querySelectorAll("[data-meetup-picker-option]").forEach(o=>o.setAttribute("aria-selected",String(o===option)));
+        list.hidden=true;
+        button.setAttribute("aria-expanded","false");
+      });
+    });
     const send=d.querySelector("#sendMeetupPlan");
-    if(send)send.onclick=async()=>{try{const friendIds=[...d.querySelectorAll("[data-meetup-friend]:checked")].map(x=>x.value),venueId=d.querySelector("[data-meetup-venue]")?.value||"";await saveMeetupPlan(friendIds,venueId,d.querySelector("#meetupDate").value,d.querySelector("#meetupTime").value,d.querySelector("#meetupNote").value);refreshMenuSocialSummary();closeCard();openSuggestMeetup("Meet-up suggestion saved.");}catch(e){closeCard();openSuggestMeetup(e.message||"Could not save that meet-up.");}};
+    if(send)send.onclick=async()=>{try{const friendIds=[...d.querySelectorAll("[data-meetup-friend]:checked")].map(x=>x.value),venueId=d.querySelector("[data-meetup-venue]")?.value||"",date=normalizeMeetupDate(d.querySelector("#meetupDate").value),time=normalizeMeetupTime(d.querySelector("#meetupTime").value);await saveMeetupPlan(friendIds,venueId,date,time,d.querySelector("#meetupNote").value);refreshMenuSocialSummary();closeCard();openSuggestMeetup("Meet-up suggestion saved.");}catch(e){closeCard();openSuggestMeetup(e.message||"Could not save that meet-up.");}};
     d.querySelectorAll("[data-friend-request]").forEach(b=>b.onclick=async()=>{await respondToFriendRequest(b.dataset.friendRequest,b.dataset.action==="accept");refreshMenuSocialSummary();closeCard();openInviteFriends(b.dataset.action==="accept"?"Friend request accepted.":"Friend request rejected.");});
     d.querySelectorAll("[data-remove-friend]").forEach(b=>b.onclick=()=>{const friend=friends.find(f=>f.uid===b.dataset.removeFriend);if(friend)confirmRemoveFriend(friend);});
     d.querySelectorAll("[data-plan-status]").forEach(b=>b.onclick=async()=>{await updateMeetupStatus(b.dataset.planStatus,b.dataset.status);refreshMenuSocialSummary();closeCard();openInviteFriends(`Meet-up ${b.dataset.status}.`,mode);});
