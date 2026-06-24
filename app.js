@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "venue-ui-2026-06-23-v32";
+const APP_BUILD = "venue-ui-2026-06-23-v33";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -1569,19 +1569,36 @@ function meetupPickerMarkup({id,label,value="",text,options,extraClass=""}){
   return `<div class="meetupPicker ${extraClass}" data-meetup-picker="${esc(id)}"><input id="${esc(id)}" data-meetup-${esc(id.replace(/^meetup/,"").toLowerCase())} type="hidden" value="${esc(value)}"><button type="button" id="${esc(id)}Button" class="meetupPickerButton" aria-expanded="false">${esc(text||label)}</button><div id="${esc(id)}Options" class="meetupOptionList" hidden>${options}</div></div>`;
 }
 function meetupDateOptionsMarkup(days=90){
-  const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const weekdays=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const months=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const shortMonths=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const weekdays=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
   const today=new Date();
   today.setHours(12,0,0,0);
+  const finalDay=new Date(today);
+  finalDay.setDate(today.getDate()+days-1);
   const pad=n=>String(n).padStart(2,"0");
-  return Array.from({length:days},(_,i)=>{
-    const d=new Date(today);
-    d.setDate(today.getDate()+i);
-    const value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-    const prefix=i===0?"Today":i===1?"Tomorrow":weekdays[d.getDay()];
-    const label=`${prefix}, ${d.getDate()} ${months[d.getMonth()]}`;
-    return `<button type="button" class="meetupOption" data-meetup-picker-option data-value="${esc(value)}" data-label="${esc(label)}">${esc(label)}</button>`;
-  }).join("");
+  const weekdayMarkup=weekdays.map(d=>`<span>${esc(d)}</span>`).join("");
+  const monthBlocks=[];
+  for(let cursor=new Date(today.getFullYear(),today.getMonth(),1,12);cursor<=finalDay;cursor.setMonth(cursor.getMonth()+1)){
+    const year=cursor.getFullYear(),month=cursor.getMonth(),daysInMonth=new Date(year,month+1,0).getDate();
+    const monthLabel=`${months[month]} ${year}`;
+    const leading=(new Date(year,month,1,12).getDay()+6)%7;
+    const cells=[];
+    for(let i=0;i<leading;i++)cells.push(`<span class="meetupCalendarBlank" aria-hidden="true"></span>`);
+    for(let day=1;day<=daysInMonth;day++){
+      const d=new Date(year,month,day,12),inRange=d>=today&&d<=finalDay;
+      if(!inRange){
+        cells.push(`<span class="meetupCalendarDisabled">${day}</span>`);
+        continue;
+      }
+      const value=`${year}-${pad(month+1)}-${pad(day)}`;
+      const label=`${day} ${shortMonths[month]} ${year}`;
+      const todayClass=d.getTime()===today.getTime()?" isToday":"";
+      cells.push(`<button type="button" class="meetupCalendarDay${todayClass}" data-meetup-picker-option data-value="${esc(value)}" data-label="${esc(label)}" aria-label="${esc(label)}">${day}</button>`);
+    }
+    monthBlocks.push(`<section class="meetupCalendarMonth" aria-label="${esc(monthLabel)}"><strong>${esc(monthLabel)}</strong><div class="meetupCalendarWeekdays">${weekdayMarkup}</div><div class="meetupCalendarGrid">${cells.join("")}</div></section>`);
+  }
+  return monthBlocks.join("");
 }
 function meetupTimeOptionsMarkup(){
   const out=[];
@@ -1884,8 +1901,10 @@ async function openInviteFriends(msg="",mode="friends"){
       button.onclick=()=>{
         const opening=list.hidden;
         d.querySelectorAll(".meetupOptionList").forEach(l=>{if(l!==list)l.hidden=true;});
+        d.querySelectorAll(".meetupPicker").forEach(p=>{if(p!==picker)p.classList.remove("isOpen");});
         d.querySelectorAll(".meetupPickerButton").forEach(b=>{if(b!==button)b.setAttribute("aria-expanded","false");});
         list.hidden=!opening;
+        picker.classList.toggle("isOpen",opening);
         button.setAttribute("aria-expanded",String(opening));
       };
       list.querySelectorAll("[data-meetup-picker-option]").forEach(option=>option.onclick=()=>{
@@ -1893,6 +1912,7 @@ async function openInviteFriends(msg="",mode="friends"){
         button.textContent=option.dataset.label||option.textContent||button.textContent;
         list.querySelectorAll("[data-meetup-picker-option]").forEach(o=>o.setAttribute("aria-selected",String(o===option)));
         list.hidden=true;
+        picker.classList.remove("isOpen");
         button.setAttribute("aria-expanded","false");
       });
     });

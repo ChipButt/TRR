@@ -15,6 +15,26 @@ service cloud.firestore {
         'the-man-cave'
       ];
     }
+    function authEmail() {
+      return signedIn() && request.auth.token.email is string
+        ? request.auth.token.email.lower()
+        : '';
+    }
+    function venueEmailOwnsVenue(venueId) {
+      return (venueId == 'piston-club' && authEmail() == 'info@thepistonclub.co.uk')
+        || (venueId == 'mr-watsons' && authEmail() == 'mrwatsonscafe@gmail.com')
+        || (venueId == 'gilks-garage' && authEmail() == 'info@gilksgaragecafe.com')
+        || (venueId == 'oily-rag' && authEmail() == 'info@oilyrag.com')
+        || (venueId == 'seven-mile' && authEmail() == 'hello@sevenmile.co.uk')
+        || (venueId == 'pats-baps' && authEmail() == 'cotswoldcafe@hotmail.com')
+        || (venueId == 'the-man-cave' && authEmail() == 'info@tmcbroadway.co.uk');
+    }
+    function existingVenueProfileEmailMatches(venueId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/venueProfiles/$(venueId))
+        && get(/databases/$(database)/documents/venueProfiles/$(venueId)).data.email is string
+        && get(/databases/$(database)/documents/venueProfiles/$(venueId)).data.email.lower() == authEmail();
+    }
     function hasVenueEditorDoc() {
       return signedIn() && exists(/databases/$(database)/documents/venueEditors/$(request.auth.uid));
     }
@@ -31,8 +51,7 @@ service cloud.firestore {
         )
         || (
           signedIn()
-          && exists(/databases/$(database)/documents/venueProfiles/$(venueId))
-          && get(/databases/$(database)/documents/venueProfiles/$(venueId)).data.email == request.auth.token.email
+          && (venueEmailOwnsVenue(venueId) || existingVenueProfileEmailMatches(venueId))
         )
       );
     }
@@ -88,6 +107,47 @@ service cloud.firestore {
         'updatedAt'
       ]);
     }
+    function friendParticipantsMatch() {
+      return request.resource.data.requesterUid in request.resource.data.memberIds
+        && request.resource.data.targetUid in request.resource.data.memberIds
+        && request.resource.data.requesterUid != request.resource.data.targetUid;
+    }
+    function validFriendLinkCreate() {
+      return incomingFriendMember()
+        && validFriendLinkWrite()
+        && friendParticipantsMatch()
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.targetUid != request.auth.uid
+        && request.resource.data.status == 'pending';
+    }
+    function immutableFriendParticipants() {
+      return request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.requesterUid == resource.data.requesterUid
+        && request.resource.data.targetUid == resource.data.targetUid
+        && request.resource.data.requesterUsername == resource.data.requesterUsername
+        && request.resource.data.targetUsername == resource.data.targetUsername;
+    }
+    function validFriendLinkUpdate() {
+      return validFriendLinkWrite()
+        && incomingFriendMember()
+        && (
+          (
+            resource.data.status == 'pending'
+            && request.auth.uid == resource.data.targetUid
+            && immutableFriendParticipants()
+            && request.resource.data.status in ['linked', 'declined']
+          )
+          || (
+            resource.data.status == 'declined'
+            && validFriendLinkCreate()
+          )
+          || (
+            resource.data.status == 'linked'
+            && immutableFriendParticipants()
+            && request.resource.data.status == 'linked'
+          )
+        );
+    }
     function validMeetupWrite() {
       return request.resource.data.keys().hasOnly([
         'memberIds',
@@ -107,6 +167,48 @@ service cloud.firestore {
         'createdAt',
         'updatedAt'
       ]);
+    }
+    function validMeetupCreate() {
+      return incomingMeetupMember()
+        && validMeetupWrite()
+        && validVenueId(request.resource.data.venueId)
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid in request.resource.data.memberIds
+        && request.resource.data.friendUid in request.resource.data.memberIds
+        && request.resource.data.friendUids is list
+        && request.resource.data.friendUids.size() >= 1
+        && request.resource.data.friendUids.size() <= 8
+        && request.resource.data.memberIds.hasAll(request.resource.data.friendUids)
+        && request.resource.data.status == 'suggested'
+        && request.resource.data.responses[request.auth.uid] == 'confirmed'
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 180
+        && (request.resource.data.suggestedDate == '' || request.resource.data.suggestedDate.matches('^\\d{4}-\\d{2}-\\d{2}$'))
+        && (request.resource.data.suggestedTime == '' || request.resource.data.suggestedTime.matches('^\\d{2}:\\d{2}$'));
+    }
+    function immutableMeetupDetails() {
+      return request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.ownerUsername == resource.data.ownerUsername
+        && request.resource.data.friendUid == resource.data.friendUid
+        && request.resource.data.friendUsername == resource.data.friendUsername
+        && request.resource.data.friendUids == resource.data.friendUids
+        && request.resource.data.friendUsernames == resource.data.friendUsernames
+        && request.resource.data.venueId == resource.data.venueId
+        && request.resource.data.venueName == resource.data.venueName
+        && request.resource.data.suggestedDate == resource.data.suggestedDate
+        && request.resource.data.suggestedTime == resource.data.suggestedTime
+        && request.resource.data.note == resource.data.note;
+    }
+    function validMeetupUpdate() {
+      return existingMeetupMember()
+        && incomingMeetupMember()
+        && validMeetupWrite()
+        && immutableMeetupDetails()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['responses', 'status', 'updatedAt'])
+        && request.resource.data.status in ['suggested', 'confirmed', 'cancelled']
+        && request.resource.data.responses[request.auth.uid] in ['suggested', 'confirmed', 'declined', 'cancelled']
+        && (request.auth.uid == resource.data.ownerUid || request.resource.data.status != 'cancelled');
     }
     match /userVisits/{userId} {
       allow read, create, update: if isOwner(userId);
@@ -129,20 +231,15 @@ service cloud.firestore {
 
     match /friendLinks/{linkId} {
       allow read: if existingFriendMember();
-      allow create: if incomingFriendMember() && validFriendLinkWrite();
-      allow update: if existingFriendMember() && incomingFriendMember() && validFriendLinkWrite();
+      allow create: if validFriendLinkCreate();
+      allow update: if existingFriendMember() && validFriendLinkUpdate();
       allow delete: if existingFriendMember();
     }
 
     match /meetupPlans/{planId} {
       allow read: if existingMeetupMember();
-      allow create: if incomingMeetupMember()
-        && validMeetupWrite()
-        && validVenueId(request.resource.data.venueId);
-      allow update: if existingMeetupMember()
-        && incomingMeetupMember()
-        && validMeetupWrite()
-        && validVenueId(request.resource.data.venueId);
+      allow create: if validMeetupCreate();
+      allow update: if validMeetupUpdate();
       allow delete: if existingMeetupMember();
     }
 
