@@ -704,8 +704,12 @@ button{font:inherit}
   padding:8px;
 }
 .popCard.inviteFriendsCard .meetupTimePicker .meetupOptionList{
-  max-height:168px;
+  left:auto;
+  right:0;
+  width:calc(200% + 8px);
+  max-height:196px;
   grid-template-columns:1fr;
+  padding:8px;
 }
 .popCard.inviteFriendsCard .meetupOptionList[hidden]{
   display:none;
@@ -788,6 +792,61 @@ button{font:inherit}
 .popCard.inviteFriendsCard .meetupCalendarDay[aria-selected="true"]{
   border-color:#0a3156;
   background:rgba(10,49,86,.14);
+}
+.popCard.inviteFriendsCard .meetupTimeWheel{
+  display:grid;
+  grid-template-columns:1fr 1fr .9fr;
+  gap:6px;
+}
+.popCard.inviteFriendsCard .meetupTimeColumn{
+  display:grid;
+  gap:4px;
+  min-width:0;
+}
+.popCard.inviteFriendsCard .meetupTimeColumn strong{
+  color:#0a3156;
+  font-size:11px;
+  font-weight:900;
+  line-height:1;
+  text-align:center;
+}
+.popCard.inviteFriendsCard .meetupTimeScroll{
+  display:grid;
+  gap:4px;
+  height:112px;
+  overflow-x:hidden;
+  overflow-y:auto;
+  padding-right:2px;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+}
+.popCard.inviteFriendsCard .meetupMeridiemScroll{
+  height:auto;
+  min-height:68px;
+  align-content:start;
+}
+.popCard.inviteFriendsCard .meetupTimePart{
+  width:100%;
+  min-height:30px;
+  margin:0!important;
+  padding:0!important;
+  border:1px solid rgba(10,49,86,.24);
+  border-radius:7px;
+  background:rgba(255,248,223,.58);
+  color:#0a3156;
+  font-size:13px;
+  font-weight:900;
+  line-height:30px;
+  text-align:center;
+}
+.popCard.inviteFriendsCard .meetupTimePart[aria-selected="true"]{
+  border-color:#0a3156;
+  background:rgba(10,49,86,.14);
+}
+.popCard.inviteFriendsCard .meetupTimeDone{
+  width:100%;
+  min-height:32px;
+  margin:7px 0 0!important;
 }
 .popCard.inviteFriendsCard #sendMeetupPlan{
   width:100%;

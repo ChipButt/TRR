@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "venue-ui-2026-06-23-v33";
+const APP_BUILD = "venue-ui-2026-06-23-v34";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -1601,14 +1601,35 @@ function meetupDateOptionsMarkup(days=90){
   return monthBlocks.join("");
 }
 function meetupTimeOptionsMarkup(){
-  const out=[];
-  for(let h=0;h<24;h++){
-    for(const m of [0,30]){
-      const value=`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
-      out.push(`<button type="button" class="meetupOption" data-meetup-picker-option data-value="${value}" data-label="${value}">${value}</button>`);
-    }
-  }
-  return out.join("");
+  const hourButtons=Array.from({length:12},(_,i)=>{
+    const value=String(i+1);
+    return `<button type="button" class="meetupTimePart" data-meetup-time-part="hour" data-value="${value}">${value}</button>`;
+  }).join("");
+  const minuteButtons=Array.from({length:60},(_,i)=>{
+    const value=String(i).padStart(2,"0");
+    return `<button type="button" class="meetupTimePart" data-meetup-time-part="minute" data-value="${value}">${value}</button>`;
+  }).join("");
+  const meridiemButtons=["AM","PM"].map(value=>`<button type="button" class="meetupTimePart" data-meetup-time-part="meridiem" data-value="${value}">${value}</button>`).join("");
+  return `<div class="meetupTimeWheel" aria-label="Choose time"><div class="meetupTimeColumn"><strong>Hour</strong><div class="meetupTimeScroll">${hourButtons}</div></div><div class="meetupTimeColumn"><strong>Minute</strong><div class="meetupTimeScroll">${minuteButtons}</div></div><div class="meetupTimeColumn"><strong>AM/PM</strong><div class="meetupTimeScroll meetupMeridiemScroll">${meridiemButtons}</div></div></div><button type="button" class="meetupTimeDone" data-meetup-time-done>Done</button>`;
+}
+function meetupTimePartsFromValue(value){
+  const clean=normalizeMeetupTime(value);
+  if(!clean)return {hour:"12",minute:"00",meridiem:"PM",committed:false};
+  let [h,m]=clean.split(":").map(Number);
+  const meridiem=h>=12?"PM":"AM";
+  h=h%12;
+  if(h===0)h=12;
+  return {hour:String(h),minute:String(m).padStart(2,"0"),meridiem,committed:true};
+}
+function meetupTimeValueFromParts(parts){
+  let hour=Number(parts.hour||12),minute=Number(parts.minute||0);
+  const meridiem=parts.meridiem==="AM"?"AM":"PM";
+  if(hour===12)hour=meridiem==="AM"?0:12;
+  else if(meridiem==="PM")hour+=12;
+  return `${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}`;
+}
+function meetupTimeLabelFromParts(parts){
+  return `${Number(parts.hour||12)}:${String(parts.minute||"00").padStart(2,"0")} ${parts.meridiem==="AM"?"AM":"PM"}`;
 }
 function visibleMeetupPlans(meetups=[]){
   return [...meetups].filter(p=>{
@@ -1906,6 +1927,7 @@ async function openInviteFriends(msg="",mode="friends"){
         list.hidden=!opening;
         picker.classList.toggle("isOpen",opening);
         button.setAttribute("aria-expanded",String(opening));
+        if(opening&&picker.classList.contains("meetupTimePicker"))setTimeout(()=>list.querySelectorAll('.meetupTimePart[aria-selected="true"]').forEach(el=>el.scrollIntoView({block:"center"})),0);
       };
       list.querySelectorAll("[data-meetup-picker-option]").forEach(option=>option.onclick=()=>{
         input.value=option.dataset.value||"";
@@ -1915,6 +1937,37 @@ async function openInviteFriends(msg="",mode="friends"){
         picker.classList.remove("isOpen");
         button.setAttribute("aria-expanded","false");
       });
+      if(picker.classList.contains("meetupTimePicker")){
+        const selected=meetupTimePartsFromValue(input.value);
+        picker.dataset.timeHour=selected.hour;
+        picker.dataset.timeMinute=selected.minute;
+        picker.dataset.timeMeridiem=selected.meridiem;
+        const syncTimePicker=commit=>{
+          const parts={hour:picker.dataset.timeHour||"12",minute:picker.dataset.timeMinute||"00",meridiem:picker.dataset.timeMeridiem||"PM"};
+          list.querySelectorAll("[data-meetup-time-part]").forEach(part=>{
+            const active=part.dataset.value===parts[part.dataset.meetupTimePart];
+            part.setAttribute("aria-selected",String(active));
+          });
+          if(commit){
+            input.value=meetupTimeValueFromParts(parts);
+            button.textContent=meetupTimeLabelFromParts(parts);
+          }
+        };
+        syncTimePicker(false);
+        list.querySelectorAll("[data-meetup-time-part]").forEach(part=>part.onclick=()=>{
+          const key=part.dataset.meetupTimePart;
+          if(key==="hour")picker.dataset.timeHour=part.dataset.value||"12";
+          if(key==="minute")picker.dataset.timeMinute=part.dataset.value||"00";
+          if(key==="meridiem")picker.dataset.timeMeridiem=part.dataset.value==="AM"?"AM":"PM";
+          syncTimePicker(true);
+        });
+        const done=list.querySelector("[data-meetup-time-done]");
+        if(done)done.onclick=()=>{
+          list.hidden=true;
+          picker.classList.remove("isOpen");
+          button.setAttribute("aria-expanded","false");
+        };
+      }
     });
     const send=d.querySelector("#sendMeetupPlan");
     if(send)send.onclick=async()=>{try{const friendIds=[...d.querySelectorAll("[data-meetup-friend]:checked")].map(x=>x.value),venueId=d.querySelector("[data-meetup-venue]")?.value||"",date=normalizeMeetupDate(d.querySelector("#meetupDate").value),time=normalizeMeetupTime(d.querySelector("#meetupTime").value);await saveMeetupPlan(friendIds,venueId,date,time,d.querySelector("#meetupNote").value);refreshMenuSocialSummary();closeCard();openSuggestMeetup("Meet-up suggestion saved.");}catch(e){closeCard();openSuggestMeetup(e.message||"Could not save that meet-up.");}};

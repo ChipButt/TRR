@@ -1,5 +1,5 @@
 (function(){
-  const APP_JS = "app.js?build=venue-ui-2026-06-23-v33";
+  const APP_JS = "app.js?build=venue-ui-2026-06-23-v34";
 
   function fail(error){
     console.error("Restoration Route loader failed", error);
