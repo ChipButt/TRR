@@ -1513,7 +1513,49 @@ function openAuthPanel(mode="login",msg=""){
 }
 function closeAuthPanel(){document.querySelectorAll("#authPanel").forEach(x=>x.remove())}
 async function reserveUsername(username,uid){const u=username.toLowerCase(),ref=fb.doc(db,"usernames",u),snap=await fb.getDoc(ref);if(snap.exists()&&snap.data().uid!==uid)throw new Error("That username is already taken.");await fb.setDoc(ref,{uid,username,usernameLower:u,updatedAt:fb.serverTimestamp()},{merge:true});}
-async function handleRegister(updateOnly=false){const email=document.getElementById("authEmail").value.trim(),pass=document.getElementById("authPassword").value,user=document.getElementById("authUsername").value.trim(),terms=document.getElementById("authTerms").checked,bad=badUsername(user); if(email)storageSet("restorationRouteLastEmail",email);if(bad)return openAuthPanel(updateOnly?"complete":"register",bad);if(!terms)return openAuthPanel(updateOnly?"complete":"register","You need to accept the terms to use the app.");try{if(updateOnly&&currentUser){await reserveUsername(user,currentUser.uid);state.username=user;state.termsAccepted=true;await fb.updateProfile(currentUser,{displayName:user}).catch(()=>{});await saveCloud();closeAuthPanel();renderHome();return}const cred=await fb.createUserWithEmailAndPassword(auth,email,pass);currentUser=cred.user;await reserveUsername(user,cred.user.uid);await fb.updateProfile(cred.user,{displayName:user}).catch(()=>{});await fb.sendEmailVerification(cred.user).catch(()=>{});state={...defaultState(),uid:cred.user.uid,email,username:user,termsAccepted:true,emailVerified:false};await saveCloud();closeAuthPanel();renderHome();openProfile("Verification email sent. Progress saves now. Prize entries become eligible once your email is verified.");}catch(e){openAuthPanel(updateOnly?"complete":"register",friendlyAuthError(e,"Could not create that account."));}}
+async function handleRegister(updateOnly=false){
+  const email=document.getElementById("authEmail").value.trim(),pass=document.getElementById("authPassword").value,user=document.getElementById("authUsername").value.trim(),terms=document.getElementById("authTerms").checked,bad=badUsername(user);
+  if(email)storageSet("restorationRouteLastEmail",email);
+  if(bad)return openAuthPanel(updateOnly?"complete":"register",bad);
+  if(!terms)return openAuthPanel(updateOnly?"complete":"register","You need to accept the terms to use the app.");
+  if(updateOnly&&currentUser){
+    try{
+      await reserveUsername(user,currentUser.uid);
+      state.username=user;state.termsAccepted=true;
+      await fb.updateProfile(currentUser,{displayName:user}).catch(()=>{});
+      await saveCloud();
+      closeAuthPanel();renderHome();return;
+    }catch(e){
+      return openAuthPanel("complete",friendlyAuthError(e,"Could not save those account details."));
+    }
+  }
+  let createdUser=null,reservedLower="";
+  try{
+    const cred=await fb.createUserWithEmailAndPassword(auth,email,pass);
+    createdUser=cred.user;currentUser=cred.user;
+    await reserveUsername(user,cred.user.uid);
+    reservedLower=user.toLowerCase();
+    await fb.updateProfile(cred.user,{displayName:user}).catch(()=>{});
+    state={...defaultState(),uid:cred.user.uid,email,username:user,termsAccepted:true,emailVerified:false};
+    await saveCloud();
+    await fb.sendEmailVerification(cred.user).catch(()=>{});
+    closeAuthPanel();renderHome();
+    openProfile("Verification email sent. Progress saves now. Prize entries become eligible once your email is verified.");
+  }catch(e){
+    if(createdUser){
+      if(reservedLower&&firebaseReady){
+        const ref=fb.doc(db,"usernames",reservedLower);
+        const snap=await fb.getDoc(ref).catch(()=>null);
+        if(snap&&snap.exists()&&snap.data()?.uid===createdUser.uid)await fb.deleteDoc(ref).catch(()=>{});
+      }
+      if(fb?.deleteUser)await fb.deleteUser(createdUser).catch(()=>{});
+      currentUser=null;
+      state=defaultState();
+      saveLocal();
+    }
+    openAuthPanel("register",friendlyAuthError(e,"Could not create that account."));
+  }
+}
 async function handleLogin(){try{const email=document.getElementById("authEmail").value.trim(); if(email)storageSet("restorationRouteLastEmail",email); await fb.signInWithEmailAndPassword(auth,email,document.getElementById("authPassword").value)}catch(e){const code=(e&&e.code)||"";if(code.includes("user-not-found"))return openAuthPanel("register","No account was found for that email address. Create an account to continue.");openAuthPanel("login",friendlyAuthError(e,"Could not sign in."))}}
 async function handleForgotLogin(){const email=(document.getElementById("recoverEmail")?.value||"").trim();if(!email)return openAuthPanel("forgot","Enter the email address used for this app.");try{storageSet("restorationRouteLastEmail",email);const url=location.origin&&location.pathname?location.origin+location.pathname:location.href.split(/[?#]/)[0];await fb.sendPasswordResetEmail(auth,email,{url,handleCodeInApp:false});openAuthPanel("login","Reset email sent. Open the email, set a new password, then sign in here with your email address.");}catch(e){openAuthPanel("forgot",friendlyAuthError(e,"Could not send the reset email."));}}
 function openProfile(msg=""){if(typeof msg!=="string")msg="";stageCard(`<h2>Profile</h2>${msg?`<p>${esc(msg)}</p>`:""}<p>Email: ${esc(state.email||"")}</p><p>Username: ${esc(state.username||"")}</p><p>Email verified: ${state.emailVerified?"Yes":"No"}</p>${!state.emailVerified?'<button id="resendVerification">Resend Verification Email</button><button id="refreshVerification">I Verified It</button>':""}<button id="changeUsername">Change Username</button><button id="showQuickGuide">Quick Guide</button><button id="showPrizeInfo">Prize Draw Info</button><button id="profileLogout" class="profileLogoutAsset" aria-label="Log Out"><img src="${esc(DATA.assets.menuButtons?.logout||"assets/menu_buttons_restoration_route_button_log_out_true_alpha.webp")}" alt="Log Out"></button>`,"stageCard profileCard",d=>{const r=d.querySelector("#resendVerification");if(r)r.onclick=()=>currentUser&&!currentUser.__local&&fb.sendEmailVerification(currentUser);const rf=d.querySelector("#refreshVerification");if(rf)rf.onclick=async()=>{if(!currentUser||currentUser.__local)return;await fb.reload(currentUser);state.emailVerified=!!auth.currentUser.emailVerified;promotePendingPrizeEntriesIfVerified();await saveCloud();closeCard();openProfile(state.emailVerified?"Email verified. Any pending prize entries are now confirmed.":"Email verification has not completed yet.");};const cu=d.querySelector("#changeUsername");if(cu)cu.onclick=()=>openUsernameEditor();const guide=d.querySelector("#showQuickGuide");if(guide)guide.onclick=()=>{closeCard();openHowTo();};const prize=d.querySelector("#showPrizeInfo");if(prize)prize.onclick=()=>{closeCard();openPrizeInfo();};const lo=d.querySelector("#profileLogout");if(lo)lo.onclick=()=>{closeCard();openLogout();};});}
