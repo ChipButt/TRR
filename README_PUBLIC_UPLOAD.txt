@@ -45,3 +45,11 @@ PUBLIC SELF-UPDATING BUILD
 - Internal app build ID: public-2026-05-24-self-updating-auth-scanner-layout
 - Users do not need to add a ?v=... URL parameter.
 - The app uses network-first loading for app shell files and clears only old editor/layout overrides when the build ID changes. User profile/progress data is preserved.
+
+FIRESTORE RULES DEPLOYMENT
+- GitHub Pages does NOT deploy firestore.rules to Firebase automatically.
+- After any firestore.rules change, deploy the rules to the Firebase project "the-restoration-route" before public release.
+- From this repo with the Firebase CLI authenticated:
+  firebase deploy --only firestore:rules --project the-restoration-route
+- Confirm the deployed rules in Firebase Console after deployment.
+
