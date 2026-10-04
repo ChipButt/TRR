@@ -439,6 +439,11 @@ button{font:inherit}
   background:#8d261f;
   border-color:#8d261f;
 }
+.stageCardStage .howToCard .howToSteps{display:grid;gap:8px;margin:4px 0 12px}
+.stageCardStage .howToCard .howToSteps p{margin:0;padding:8px 10px;border:1px solid rgba(10,49,86,.22);border-radius:9px;background:rgba(255,248,223,.5);font-size:13px;line-height:1.28}
+.stageCardStage .howToCard>button:not(.stageCardCloseX){display:block;width:100%;margin:8px 0 0}
+.popCard.inviteFriendsCard .socialPlanActions{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.popCard.inviteFriendsCard .socialPlanActions button{flex:1 1 110px;margin:0}
 .inviteFriendsStage .popCard.inviteFriendsCard,
 .stageCardStage .popCard.inviteFriendsCard{
   position:absolute;
