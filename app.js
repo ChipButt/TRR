@@ -962,6 +962,21 @@ function repairPageAssets(){
   const layerAssets=(design.layers||[]).map(l=>repairLayerSrc(l,{key:"vehicle",isVehicleCompletion:false})).filter(Boolean);
   return [design.stage?.background||"assets/repair_ui_background_v78.png",REPAIR_TRANSITION_VIDEO,...layerAssets];
 }
+function startupAssets(){
+  const homeAssets=(DATA.layout.home.layers||[]).filter(l=>l.type==="image").map(l=>stableSrc(l.src,l.name));
+  const menuAssets=(DATA.layout.menu.layers||[]).filter(l=>l.type==="image").map(l=>menuButtonAsset(l));
+  return [
+    DATA.assets.home,
+    MENU_LOGO_ASSET,
+    DATA.assets.menu,
+    DATA.assets.banterBox,
+    DATA.assets.wallMap,
+    DATA.assets.serviceBook,
+    DATA.assets.scannerTool,
+    ...homeAssets,
+    ...menuAssets
+  ].filter(Boolean);
+}
 function allAppAssets(){
   const homeAssets=(DATA.layout.home.layers||[]).filter(l=>l.type==="image").map(l=>stableSrc(l.src,l.name));
   const menuAssets=(DATA.layout.menu.layers||[]).filter(l=>l.type==="image").map(l=>menuButtonAsset(l));
@@ -994,7 +1009,7 @@ async function warmAppDataAndAssets({show=false,keepVisible=false}={}){
   if(show)token=showLoadingScreen("Checking for updates ...");
   if(!appWarmPromise){
     appWarmPromise=Promise.allSettled([
-      preloadAssets(allAppAssets()),
+      preloadAssets(startupAssets()),
       appSessionActive()?loadSocialData():Promise.resolve(null)
     ]).then(()=>true).catch(()=>false);
   }
