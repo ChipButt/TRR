@@ -406,6 +406,7 @@ function venueEmailsForId(id){
   return out;
 }
 function applyVenueEmailAccess(user){
+  if(!user?.emailVerified)return;
   const email=normalizeEmail(user?.email);
   if(!email)return;
   const venues={...(venueEditorAccess.venues||{})};
