@@ -115,6 +115,7 @@ const BAKED_LAYOUT_ADJUSTMENTS = (()=>{
 })();
 
 let auth=null, db=null, currentUser=null, firebaseReady=false, fb=null, authStateResolved=false;
+let howToShownThisLoad=false, homeRenderVersion=0;
 function rememberedEmail(){return (state.email||storageGet("restorationRouteLastEmail","")).trim();}
 function hasRememberedAccount(){return !!(state.uid && rememberedEmail() && state.username && state.termsAccepted);}
 function appSessionActive(){return !!currentUser || hasRememberedAccount() || LOCAL_TEST_MODE;}
@@ -816,6 +817,7 @@ function homeLayer(l,n){
 }
 
 function renderHome(){
+  const thisRender=++homeRenderVersion;
   setScales(); overlayRoot.innerHTML=""; scannerRoot.innerHTML=""; scannerRoot.style.display="none"; stopScanner(); homeRoot.innerHTML="";
   ensureLayoutEditor();
   const st=makeStage("homeStage");st.dataset.editorScreen="home";
@@ -836,6 +838,21 @@ function renderHome(){
   if(editorMode())setTimeout(ensureLiveEditor,0);
   setTimeout(maybeShowRouteComplete,80);
   if(loadingRoot&&!loadingRoot.classList.contains("isHidden"))revealWhenReady(loadingToken,st);
+  scheduleHowTo(thisRender);
+}
+function scheduleHowTo(renderVersion=homeRenderVersion){
+  if(howToShownThisLoad||venueAccountSession||LOCAL_TEST_MODE)return;
+  setTimeout(()=>{
+    if(howToShownThisLoad||renderVersion!==homeRenderVersion||venueAccountSession||LOCAL_TEST_MODE)return;
+    if(!appSessionActive()||!state.username||!state.termsAccepted)return;
+    if(document.querySelector("#authPanel")||overlayRoot.querySelector(".popCard,.popupShell,[data-card-shell]"))return;
+    openHowTo();
+  },650);
+}
+function openHowTo(){
+  if(venueAccountSession)return;
+  howToShownThisLoad=true;
+  stageCard(`<h2>Quick Guide</h2><div class="howToSteps"><p><strong>Menu</strong> — tap the Restoration Route logo at the top for your profile, Friends and Meet-Ups.</p><p><strong>Garages</strong> — tap the service book or any damaged vehicle part to see the route stops and venue details.</p><p><strong>Scan</strong> — tap the scanner tool and scan the private route code at each participating venue.</p><p><strong>Restore</strong> — every new venue scan repairs one component. Restore all 8 components to complete a vehicle.</p><p><strong>Prize draw</strong> — each completed vehicle earns one prize draw entry once your email is verified.</p></div><button type="button" data-close>Got It</button>`,"stageCard howToCard");
 }
 function popupStage(cls="popupStage"){overlayRoot.innerHTML="";const sh=document.createElement("div");sh.className="popupShell";const st=makeStage(cls);st.dataset.editorScreen=cls.includes("repairStage")?"repair":cls.includes("menuStage")?"menu":cls.includes("pageStage")?"page":"popup";sh.appendChild(st);overlayRoot.appendChild(sh);if(editorMode())setTimeout(ensureLiveEditor,0);return st;}
 function detachedPopupStage(cls="popupStage"){
@@ -1495,6 +1512,34 @@ async function handleForgotLogin(){const email=(document.getElementById("recover
 function openProfile(msg=""){if(typeof msg!=="string")msg="";stageCard(`<h2>Profile</h2>${msg?`<p>${esc(msg)}</p>`:""}<p>Email: ${esc(state.email||"")}</p><p>Username: ${esc(state.username||"")}</p><p>Email verified: ${state.emailVerified?"Yes":"No"}</p>${!state.emailVerified?'<button id="resendVerification">Resend Verification Email</button><button id="refreshVerification">I Verified It</button>':""}<button id="changeUsername">Change Username</button><button id="profileLogout" class="profileLogoutAsset" aria-label="Log Out"><img src="${esc(DATA.assets.menuButtons?.logout||"assets/menu_buttons_restoration_route_button_log_out_true_alpha.webp")}" alt="Log Out"></button>`,"stageCard profileCard",d=>{const r=d.querySelector("#resendVerification");if(r)r.onclick=()=>currentUser&&!currentUser.__local&&fb.sendEmailVerification(currentUser);const rf=d.querySelector("#refreshVerification");if(rf)rf.onclick=async()=>{if(!currentUser||currentUser.__local)return;await fb.reload(currentUser);state.emailVerified=!!auth.currentUser.emailVerified;await saveCloud();closeCard();openProfile();};const cu=d.querySelector("#changeUsername");if(cu)cu.onclick=()=>openUsernameEditor();const lo=d.querySelector("#profileLogout");if(lo)lo.onclick=()=>{closeCard();openLogout();};});}
 function openUsernameEditor(){stageCard(`<h2>Change Username</h2><p>Enter the public username friends can use to find you.</p><input id="newUsername" autocomplete="username" placeholder="Username" value="${esc(state.username||"")}"><button id="saveUsername">Save Username</button><button data-close>Cancel</button>`,"stageCard profileCard",d=>{d.querySelector("#saveUsername").onclick=async()=>{const user=d.querySelector("#newUsername").value.trim();const bad=badUsername(user);if(bad){closeCard();return stageCard(`<h2>Username</h2><p>${esc(bad)}</p><button data-close>Close</button>`,"stageCard profileCard")}try{if(currentUser&&!currentUser.__local&&firebaseReady){await reserveUsername(user,currentUser.uid);await fb.updateProfile(currentUser,{displayName:user}).catch(()=>{});}state.username=user;state.termsAccepted=true;await saveCloud();closeCard();openProfile("Username updated.");}catch(e){closeCard();stageCard(`<h2>Username</h2><p>${esc(friendlyAuthError(e,"Could not update that username."))}</p><button data-close>Close</button>`,"stageCard profileCard");}};});}
 function socialUserId(){return currentUser?.uid||state.uid||"local-test-user";}
+async function ensureOnlineSocialSession(){
+  if(LOCAL_TEST_MODE)return true;
+  if(firebaseReady&&currentUser&&!currentUser.__local)return true;
+  if(firebaseReady&&auth?.currentUser){
+    currentUser=auth.currentUser;
+    state.uid=currentUser.uid;
+    state.email=currentUser.email||state.email||"";
+    state.emailVerified=!!currentUser.emailVerified;
+    return true;
+  }
+  if(firebaseReady&&!authStateResolved&&auth&&fb?.onAuthStateChanged){
+    const restored=await new Promise(resolve=>{
+      let finished=false,unsubscribe=null;
+      const finish=user=>{if(finished)return;finished=true;clearTimeout(timer);try{unsubscribe&&unsubscribe()}catch(e){}resolve(user||null);};
+      const timer=setTimeout(()=>finish(auth.currentUser||null),3000);
+      unsubscribe=fb.onAuthStateChanged(auth,user=>finish(user));
+    });
+    if(restored){
+      currentUser=restored;
+      state.uid=restored.uid;
+      state.email=restored.email||state.email||"";
+      state.emailVerified=!!restored.emailVerified;
+      return true;
+    }
+  }
+  if(!navigator.onLine||!firebaseReady)throw new Error("Friends and Meet-Ups need an internet connection. Check your signal and try again.");
+  throw new Error("Your route progress is remembered on this device, but Friends and Meet-Ups need your secure sign-in to reconnect. Sign in again once on this device.");
+}
 function pairLabel(a,b){return [a,b].sort().join("|");}
 function planDateText(p){return [p.suggestedDate,p.suggestedTime].filter(Boolean).join(" ")||"Time to confirm";}
 function planDateLineText(p){
@@ -1724,7 +1769,7 @@ async function findUserByUsername(username){
     if(!localUser)throw new Error("No app user was found with that username.");
     return {...localUser};
   }
-  if(!firebaseReady||!currentUser||currentUser.__local)throw new Error("Sign in online before adding friends by username.");
+  await ensureOnlineSocialSession();
   const snap=await fb.getDoc(fb.doc(db,"usernames",key));
   if(!snap.exists())throw new Error("No app user was found with that username.");
   const data=snap.data()||{};
@@ -1773,7 +1818,7 @@ async function addFriendByUsername(username){
 }
 async function respondToFriendRequest(requestId,accepted){
   const uid=socialUserId();
-  if(LOCAL_TEST_MODE||!firebaseReady||!currentUser||currentUser.__local){
+  if(LOCAL_TEST_MODE){
     const request=(socialCache.friendRequests||[]).find(r=>r.id===requestId);
     if(request&&accepted&&!(socialCache.friends||[]).some(f=>f.uid===request.uid)){
       socialCache.friends=[...(socialCache.friends||[]),{uid:request.uid,username:request.username,completedVehicles:request.completedVehicles||0,totalPartsRestored:request.totalPartsRestored||0}];
@@ -1783,12 +1828,13 @@ async function respondToFriendRequest(requestId,accepted){
     saveLocalSocial();
     return;
   }
+  await ensureOnlineSocialSession();
   await fb.setDoc(fb.doc(db,"friendLinks",requestId),{status:accepted?"linked":"declined",updatedAt:fb.serverTimestamp()},{merge:true});
 }
 async function removeFriend(friend){
   const uid=socialUserId();
   if(!friend?.uid)throw new Error("That friend could not be found.");
-  if(LOCAL_TEST_MODE||!firebaseReady||!currentUser||currentUser.__local){
+  if(LOCAL_TEST_MODE){
     socialCache.friends=(socialCache.friends||[]).filter(f=>f.uid!==friend.uid);
     socialCache.friendRequests=(socialCache.friendRequests||[]).filter(r=>r.uid!==friend.uid);
     socialCache.sentFriendRequests=(socialCache.sentFriendRequests||[]).filter(r=>r.uid!==friend.uid);
@@ -1796,6 +1842,7 @@ async function removeFriend(friend){
     saveLocalSocial();
     return;
   }
+  await ensureOnlineSocialSession();
   const linkId=friend.id||await sha256(pairLabel(uid,friend.uid));
   await fb.deleteDoc(fb.doc(db,"friendLinks",linkId));
 }
@@ -1810,11 +1857,12 @@ function confirmRemoveFriend(friend){
 async function loadSocialData(){
   if(!appSessionActive())return {friends:[],meetups:[],friendRequests:[],sentFriendRequests:[]};
   const uid=socialUserId();
-  if(LOCAL_TEST_MODE||!firebaseReady||!currentUser||currentUser.__local){
+  if(LOCAL_TEST_MODE){
     socialCache=normalizeLocalSocial(socialCache);
     saveLocalSocial();
     return {friends:[...(socialCache.friends||[])],meetups:[...(socialCache.meetups||[])],friendRequests:[...(socialCache.friendRequests||[])],sentFriendRequests:[...(socialCache.sentFriendRequests||[])]};
   }
+  await ensureOnlineSocialSession();
   const friendSnap=await fb.getDocs(fb.query(fb.collection(db,"friendLinks"),fb.where("memberIds","array-contains",uid),fb.limit(50)));
   const friendMeta=[],friendRequests=[],sentFriendRequests=[];
   friendSnap.forEach(docSnap=>{
@@ -1845,11 +1893,12 @@ async function saveMeetupPlan(friendUids,venueId,date,time,note){
   const friendNames=friends.map(f=>f.username||"Friend");
   const responses=Object.fromEntries([[uid,"confirmed"],...friends.map(f=>[f.uid,"suggested"])]);
   const plan={memberIds:[uid,...friends.map(f=>f.uid)].sort(),ownerUid:uid,ownerUsername:state.username||currentUser?.displayName||"Player",friendUid:friends[0].uid,friendUsername:friendNames.join(", "),friendUids:friends.map(f=>f.uid),friendUsernames:friendNames,venueId:venue.id,venueName:venue.name,suggestedDate:date||"",suggestedTime:time||"",note:cleanText(note,180),status:"suggested",responses};
-  if(LOCAL_TEST_MODE||!firebaseReady||!currentUser||currentUser.__local){
+  if(LOCAL_TEST_MODE){
     socialCache.meetups.unshift({id:"local-plan-"+Date.now(),...plan});
     saveLocalSocial();
     return;
   }
+  await ensureOnlineSocialSession();
   await fb.addDoc(fb.collection(db,"meetupPlans"),{...plan,createdAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp()});
 }
 async function updateMeetupStatus(planId,status){
@@ -1862,11 +1911,12 @@ async function updateMeetupStatus(planId,status){
     const allConfirmed=invited.length&&invited.every(id=>responses[id]==="confirmed");
     return {...plan,responses,status:allConfirmed?"confirmed":"suggested"};
   };
-  if(LOCAL_TEST_MODE||!firebaseReady||!currentUser||currentUser.__local){
+  if(LOCAL_TEST_MODE){
     socialCache.meetups=(socialCache.meetups||[]).map(p=>p.id===planId?applyStatus(p):p);
     saveLocalSocial();
     return;
   }
+  await ensureOnlineSocialSession();
   const ref=fb.doc(db,"meetupPlans",planId),snap=await fb.getDoc(ref);
   if(!snap.exists())throw new Error("That meet-up could not be found.");
   const next=applyStatus({id:planId,...(snap.data()||{})});
@@ -1881,6 +1931,15 @@ async function openInviteFriends(msg="",mode="friends"){
   try{
     const data=await loadSocialData();
     const friends=data.friends||[],meetups=visibleMeetupPlans(data.meetups||[]),friendRequests=data.friendRequests||[],sentFriendRequests=data.sentFriendRequests||[];
+    const uid=socialUserId();
+    const meetupRows=meetups.map(p=>{
+      const response=currentPlanResponse(p,uid),status=planStatusText(p);
+      let actions="";
+      if(p.ownerUid===uid)actions=p.status!=="cancelled"?`<button type="button" data-plan-status="${esc(p.id)}" data-status="cancelled">Cancel Meet-Up</button>`:"";
+      else if(response==="suggested")actions=`<button type="button" data-plan-status="${esc(p.id)}" data-status="confirmed">Accept</button><button type="button" data-plan-status="${esc(p.id)}" data-status="declined">Decline</button>`;
+      else if(response==="confirmed")actions=`<button type="button" data-calendar-plan="${esc(p.id)}">Add to Calendar</button><button type="button" data-plan-status="${esc(p.id)}" data-status="declined">Can't Make It</button>`;
+      return `<div class="socialRow socialPlan"><strong>${esc(p.venueName||"Meet-Up")}</strong><span>${esc(planDateLineText(p))} · ${esc(planTimeLineText(p))}</span><span>Status: ${esc(status)}</span><div class="socialPlanInvitees">${planInviteeLinesMarkup(p,"socialPlanPeople")}</div>${p.note?`<em>${esc(p.note)}</em>`:""}${actions?`<div class="socialPlanActions">${actions}</div>`:""}</div>`;
+    }).join("");
     const venues=routeVenues();
     const venueOptions=venues.map(v=>`<button type="button" class="meetupOption" data-meetup-picker-option data-value="${esc(v.id)}" data-label="${esc(v.name)}">${esc(v.name)}</button>`).join("");
     const firstVenue=venues[0]||{};
@@ -1894,7 +1953,7 @@ async function openInviteFriends(msg="",mode="friends"){
     const body=d.querySelector("#inviteFriendsBody");
     const inviteMarkup=`<div class="friendSearch"><input id="friendUsernameSearch" autocomplete="off" placeholder="Username"><button id="friendSearchButton">Send Request</button></div>${requestRows?`<h3>Friend Requests</h3><div class="socialRows">${requestRows}</div>`:""}${sentRows?`<h3>Sent Requests</h3><div class="socialRows">${sentRows}</div>`:""}<h3>Linked Friends</h3><div class="socialRows">${friendRows}</div>`;
     const meetupMarkup=friends.length?`<div class="meetupFriendPicker"><input id="meetupFriendSearch" autocomplete="off" placeholder="Search linked friends"><div id="meetupFriendCount" class="meetupFriendCount">${friends.length} linked friend${friends.length===1?"":"s"} available</div><div class="meetupFriendChoices">${friendChoices}</div><p id="meetupFriendEmpty" class="meetupFriendEmpty" hidden>No linked friends match that search.</p></div><h3>Venue</h3>${venuePicker}<h3>Date & Time</h3><div class="meetupWhen">${datePicker}${timePicker}</div><textarea id="meetupNote" rows="2" placeholder="Message or meet-up details"></textarea><button id="sendMeetupPlan">Send Suggestion</button>`:`<p>Add a friend before suggesting a meet-up.</p>`;
-    body.innerHTML=mode==="meetup"?`<h3>Friends</h3>${meetupMarkup}`:inviteMarkup;
+    body.innerHTML=mode==="meetup"?`${meetupRows?`<h3>Plans & Invitations</h3><div class="socialRows">${meetupRows}</div>`:""}<h3>New Meet-Up</h3>${meetupMarkup}`:inviteMarkup;
     const meetupFriendSearch=d.querySelector("#meetupFriendSearch"),meetupFriendCount=d.querySelector("#meetupFriendCount"),meetupFriendEmpty=d.querySelector("#meetupFriendEmpty"),meetupFriendChoices=[...d.querySelectorAll("[data-meetup-friend-choice]")];
     const syncMeetupFriendPicker=()=>{
       if(!meetupFriendSearch)return;
@@ -2124,7 +2183,7 @@ function stageCard(html,extraClass="stageCard",after){
 function inviteFriendsCard(html){
   return stageCard(html,"inviteFriendsCard");
 }
-function closeCard(){overlayRoot.querySelectorAll(".popCard").forEach(c=>c.remove());overlayRoot.querySelectorAll("[data-card-shell]").forEach(c=>c.remove())}
+function closeCard(){overlayRoot.querySelectorAll(".popCard").forEach(c=>c.remove());overlayRoot.querySelectorAll("[data-card-shell]").forEach(c=>c.remove());scheduleHowTo();}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
 function hornHit(stage,x,y,w,h,hoverLayer=null){
   const b=document.createElement("button");
