@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "launch-audit-2026-10-04-v3";
+const APP_BUILD = "launch-audit-2026-10-04-v4";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -1614,6 +1614,23 @@ async function ensureOnlineSocialSession(){
   if(!navigator.onLine||!firebaseReady)throw new Error("Friends and Meet-Ups need an internet connection. Check your signal and try again.");
   throw new Error("Your route progress is remembered on this device, but Friends and Meet-Ups need your secure sign-in to reconnect. Sign in again once on this device.");
 }
+async function ensureOnlineProgressSession(){
+  try{
+    return await ensureOnlineSocialSession();
+  }catch(e){
+    if(!navigator.onLine||!firebaseReady)throw new Error("Route progress needs an internet connection to save safely. Check your signal and try again.");
+    throw new Error("Your saved login needs to reconnect before route progress can be saved. Sign in again once on this device.");
+  }
+}
+function openProgressSaveProblem(message,retry=null){
+  const reconnect=/sign in|login|reconnect/i.test(String(message||""));
+  stageCard(`<h2>Progress Not Saved</h2><p>${esc(message||"The app could not safely save that change.")}</p><p>Your previous route progress is unchanged.</p>${reconnect?'<button type="button" id="progressReconnect">Sign In to Reconnect</button>':""}${typeof retry==="function"?'<button type="button" id="progressRetry">Try Again</button>':""}<button type="button" data-close>Close</button>`,"stageCard progressSaveCard",d=>{
+    const signIn=d.querySelector("#progressReconnect");
+    if(signIn)signIn.onclick=()=>{closeCard();openAuthPanel("login","Sign in once to reconnect this device. Your route progress is still safe.");};
+    const again=d.querySelector("#progressRetry");
+    if(again)again.onclick=async()=>{closeCard();await retry();};
+  });
+}
 function pairLabel(a,b){return [a,b].sort().join("|");}
 function planDateText(p){return [p.suggestedDate,p.suggestedTime].filter(Boolean).join(" ")||"Time to confirm";}
 function planDateLineText(p){
@@ -2401,7 +2418,14 @@ function openVehicleCompletionRestoration(){
 function openRouteCompleteCard(){openVehicleCompletionRestoration();}
 async function sellVehicleAndStartAgain(){
   if(completionFinalizing||!state.routeCompleted||!allRepaired())return;
+  try{
+    await ensureOnlineProgressSession();
+  }catch(e){
+    openProgressSaveProblem(e.message||"Your secure login could not reconnect.",()=>sellVehicleAndStartAgain());
+    return;
+  }
   completionFinalizing=true;
+  const previous={...state,repaired:{...(state.repaired||{})},log:[...(state.log||[])]};
   try{
     const confirmed=!!(state.emailVerified||auth?.currentUser?.emailVerified);
     state.completedVehicles=(state.completedVehicles||0)+1;
@@ -2423,6 +2447,11 @@ async function sellVehicleAndStartAgain(){
       ? `You earned 1 prize draw entry. You now have ${Number(state.prizeEntries||0)} confirmed entr${Number(state.prizeEntries||0)===1?"y":"ies"}.`
       : `Your vehicle is complete. This prize draw entry is pending until you verify your email address.`;
     stageCard(`<h2>Vehicle Complete</h2><p>${esc(entryMessage)}</p><p>Your next restoration is ready to begin.</p><button type="button" data-close>Continue</button>`,"stageCard completionEntryCard");
+  }catch(e){
+    state=previous;
+    saveLocal();
+    repairFlowActive=false;
+    openProgressSaveProblem("The completed vehicle could not be saved to your account. Check your connection and try again.",()=>sellVehicleAndStartAgain());
   }finally{
     completionFinalizing=false;
   }
@@ -2433,14 +2462,28 @@ async function resetRouteForNextVehicle(){return sellVehicleAndStartAgain();}
 async function repairVenue(id,source="scan"){
   if(!requireLogin())return;
   const v=venueById(id);if(!v)return;
-  const was=!!state.repaired[id];
-  if(!was){state.repaired[id]=true;state.totalPartsRestored=(state.totalPartsRestored||0)+1;}
-  await scanEvent(id,source,was);
-  if(!was&&allRepaired()&&!state.routeCompleted){
-    state.routeCompleted=true;
-    state.log.push({type:"vehicle_ready_to_sell",at:new Date().toISOString()});
+  try{
+    await ensureOnlineProgressSession();
+  }catch(e){
+    openProgressSaveProblem(e.message||"Your secure login could not reconnect.",()=>repairVenue(id,source));
+    return;
   }
-  await saveCloud();
+  const previous={...state,repaired:{...(state.repaired||{})},log:[...(state.log||[])]};
+  const was=!!state.repaired[id];
+  try{
+    if(!was){state.repaired[id]=true;state.totalPartsRestored=(state.totalPartsRestored||0)+1;}
+    if(!was&&allRepaired()&&!state.routeCompleted){
+      state.routeCompleted=true;
+      state.log.push({type:"vehicle_ready_to_sell",at:new Date().toISOString()});
+    }
+    await saveCloud();
+    await scanEvent(id,source,was);
+  }catch(e){
+    state=previous;
+    saveLocal();
+    openProgressSaveProblem("That repair could not be saved to your account. Check your connection and try again.",()=>repairVenue(id,source));
+    return;
+  }
   repairFlowActive=!was;
   renderHome();
   if(was){repairFlowActive=false;openVenue(id);}else openPartRestoration(v);
@@ -2459,6 +2502,14 @@ function scannerPageAssets(){
 }
 async function openScanner(){
   if(!requireLogin())return;
+  if(!LOCAL_TEST_MODE){
+    try{
+      await ensureOnlineProgressSession();
+    }catch(e){
+      openProgressSaveProblem(e.message||"Your secure login could not reconnect.",()=>openScanner());
+      return;
+    }
+  }
   const token=showLoadingScreen();
   await preloadAssets(scannerPageAssets());
   closePopup();scannerRoot.innerHTML="";scannerRoot.style.display="block";
@@ -2633,7 +2684,30 @@ function detectPrivateRouteCode(canvas,ctx){
 
 function stopScanner(){if(activeScannerTimer)clearInterval(activeScannerTimer);activeScannerTimer=null;if(activeScannerStream){activeScannerStream.getTracks().forEach(t=>t.stop());activeScannerStream=null}}
 async function matchToken(raw){let s=String(raw||""),token=s;try{const u=new URL(s);token=u.searchParams.get("scan")||u.searchParams.get("code")||s}catch{}const id=DATA.scanTokenHashes[await sha256(token.trim())];return id?venueById(id):null}
-async function handleUrlScan(){const p=new URLSearchParams(location.search),code=p.get("scan")||p.get("venue")||p.get("code");if(!code)return;history.replaceState(null,"",location.pathname);const wait=setInterval(async()=>{if(appSessionActive()&&state.username&&state.termsAccepted){clearInterval(wait);await processScanToken(code,"qr_deeplink")}},300)}
+async function handleUrlScan(){
+  const p=new URLSearchParams(location.search),code=p.get("scan")||p.get("venue")||p.get("code");
+  if(!code)return;
+  history.replaceState(null,"",location.pathname);
+  let checking=false,prompted=false;
+  const wait=setInterval(async()=>{
+    if(checking||!appSessionActive()||!state.username||!state.termsAccepted)return;
+    checking=true;
+    try{
+      await ensureOnlineProgressSession();
+      clearInterval(wait);
+      await processScanToken(code,"qr_deeplink");
+    }catch(e){
+      if(!prompted){
+        prompted=true;
+        const message=e.message||"Your secure login could not reconnect.";
+        if(/sign in|login|reconnect/i.test(message))openAuthPanel("login","Sign in once to reconnect this device. The scanned route code will continue automatically afterwards.");
+        else openProgressSaveProblem(message);
+      }
+    }finally{
+      checking=false;
+    }
+  },300);
+}
 function openPreviewFromUrl(){
   const p=new URLSearchParams(location.search),view=p.get("preview");
   if(view==="directory")openDirectory();

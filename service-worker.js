@@ -1,4 +1,4 @@
-const APP_BUILD = "launch-audit-2026-10-04-v3";
+const APP_BUILD = "launch-audit-2026-10-04-v4";
 const CACHE = "restoration-route-public-static-" + APP_BUILD;
 const ASSETS = [
   'index.html',
