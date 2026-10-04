@@ -15,6 +15,537 @@ service cloud.firestore {
         'the-man-cave'
       ];
     }
+    function validUsernameDoc(usernameLower) {
+      return signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'username', 'usernameLower', 'updatedAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.username is string
+        && request.resource.data.usernameLower is string
+        && request.resource.data.username.matches('^[A-Za-z0-9_-]{3,20}
+    function authEmail() {
+      return signedIn() && request.auth.token.email is string
+        ? request.auth.token.email.lower()
+        : '';
+    }
+    function verifiedEmail() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+    function venueEmailOwnsVenue(venueId) {
+      return verifiedEmail() && ((venueId == 'piston-club' && authEmail() == 'info@thepistonclub.co.uk')
+        || (venueId == 'mr-watsons' && authEmail() == 'mrwatsonscafe@gmail.com')
+        || (venueId == 'gilks-garage' && authEmail() == 'info@gilksgaragecafe.com')
+        || (venueId == 'oily-rag' && authEmail() == 'info@oilyrag.com')
+        || (venueId == 'seven-mile' && authEmail() == 'hello@sevenmile.co.uk')
+        || (venueId == 'pats-baps' && authEmail() == 'cotswoldcafe@hotmail.com')
+        || (venueId == 'the-man-cave' && authEmail() == 'info@tmcbroadway.co.uk'));
+    }
+    function existingVenueProfileEmailMatches(venueId) {
+      return verifiedEmail()
+        && exists(/databases/$(database)/documents/venueProfiles/$(venueId))
+        && get(/databases/$(database)/documents/venueProfiles/$(venueId)).data.email is string
+        && get(/databases/$(database)/documents/venueProfiles/$(venueId)).data.email.lower() == authEmail();
+    }
+    function hasVenueEditorDoc() {
+      return signedIn() && exists(/databases/$(database)/documents/venueEditors/$(request.auth.uid));
+    }
+    function isMasterVenueEditor() {
+      return hasVenueEditorDoc()
+        && get(/databases/$(database)/documents/venueEditors/$(request.auth.uid)).data.master == true;
+    }
+    function canEditVenue(venueId) {
+      return validVenueId(venueId) && (
+        isMasterVenueEditor()
+        || (
+          hasVenueEditorDoc()
+          && get(/databases/$(database)/documents/venueEditors/$(request.auth.uid)).data.venues[venueId] == true
+        )
+        || (
+          signedIn()
+          && (venueEmailOwnsVenue(venueId) || existingVenueProfileEmailMatches(venueId))
+        )
+      );
+    }
+    function validVenueProfileWrite(venueId) {
+      return request.resource.data.venueId == venueId
+        && request.resource.data.keys().hasOnly([
+          'venueId',
+          'name',
+          'summary',
+          'address',
+          'opening',
+          'food',
+          'notes',
+          'website',
+          'phone',
+          'email',
+          'updatedAt',
+          'updatedBy',
+          'updatedByUsername'
+        ]);
+    }
+    function incomingFriendMember() {
+      return signedIn()
+        && request.resource.data.memberIds.size() == 2
+        && request.auth.uid in request.resource.data.memberIds;
+    }
+    function existingFriendMember() {
+      return signedIn()
+        && resource.data.memberIds.size() == 2
+        && request.auth.uid in resource.data.memberIds;
+    }
+    function incomingMeetupMember() {
+      return signedIn()
+        && request.resource.data.memberIds.size() >= 2
+        && request.resource.data.memberIds.size() <= 9
+        && request.auth.uid in request.resource.data.memberIds;
+    }
+    function existingMeetupMember() {
+      return signedIn()
+        && resource.data.memberIds.size() >= 2
+        && resource.data.memberIds.size() <= 9
+        && request.auth.uid in resource.data.memberIds;
+    }
+    function validFriendLinkWrite() {
+      return request.resource.data.keys().hasOnly([
+        'memberIds',
+        'requesterUid',
+        'requesterUsername',
+        'targetUid',
+        'targetUsername',
+        'status',
+        'createdAt',
+        'updatedAt'
+      ]);
+    }
+    function friendParticipantsMatch() {
+      return request.resource.data.requesterUid in request.resource.data.memberIds
+        && request.resource.data.targetUid in request.resource.data.memberIds
+        && request.resource.data.requesterUid != request.resource.data.targetUid;
+    }
+    function validFriendLinkCreate() {
+      return incomingFriendMember()
+        && validFriendLinkWrite()
+        && friendParticipantsMatch()
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.targetUid != request.auth.uid
+        && request.resource.data.status == 'pending';
+    }
+    function immutableFriendParticipants() {
+      return request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.requesterUid == resource.data.requesterUid
+        && request.resource.data.targetUid == resource.data.targetUid
+        && request.resource.data.requesterUsername == resource.data.requesterUsername
+        && request.resource.data.targetUsername == resource.data.targetUsername;
+    }
+    function validFriendLinkUpdate() {
+      return validFriendLinkWrite()
+        && incomingFriendMember()
+        && (
+          (
+            resource.data.status == 'pending'
+            && request.auth.uid == resource.data.targetUid
+            && immutableFriendParticipants()
+            && request.resource.data.status in ['linked', 'declined']
+          )
+          || (
+            resource.data.status == 'declined'
+            && validFriendLinkCreate()
+          )
+          || (
+            resource.data.status == 'linked'
+            && immutableFriendParticipants()
+            && request.resource.data.status == 'linked'
+          )
+        );
+    }
+    function validMeetupWrite() {
+      return request.resource.data.keys().hasOnly([
+        'memberIds',
+        'ownerUid',
+        'ownerUsername',
+        'friendUid',
+        'friendUsername',
+        'friendUids',
+        'friendUsernames',
+        'venueId',
+        'venueName',
+        'suggestedDate',
+        'suggestedTime',
+        'note',
+        'status',
+        'responses',
+        'createdAt',
+        'updatedAt'
+      ]);
+    }
+    function validMeetupCreate() {
+      return incomingMeetupMember()
+        && validMeetupWrite()
+        && validVenueId(request.resource.data.venueId)
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid in request.resource.data.memberIds
+        && request.resource.data.friendUid in request.resource.data.memberIds
+        && request.resource.data.friendUids is list
+        && request.resource.data.friendUids.size() >= 1
+        && request.resource.data.friendUids.size() <= 8
+        && request.resource.data.memberIds.hasAll(request.resource.data.friendUids)
+        && request.resource.data.status == 'suggested'
+        && request.resource.data.responses[request.auth.uid] == 'confirmed'
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 180
+        && (request.resource.data.suggestedDate == '' || request.resource.data.suggestedDate.matches('^\\d{4}-\\d{2}-\\d{2}$'))
+        && (request.resource.data.suggestedTime == '' || request.resource.data.suggestedTime.matches('^\\d{2}:\\d{2}$'));
+    }
+    function immutableMeetupDetails() {
+      return request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.ownerUsername == resource.data.ownerUsername
+        && request.resource.data.friendUid == resource.data.friendUid
+        && request.resource.data.friendUsername == resource.data.friendUsername
+        && request.resource.data.friendUids == resource.data.friendUids
+        && request.resource.data.friendUsernames == resource.data.friendUsernames
+        && request.resource.data.venueId == resource.data.venueId
+        && request.resource.data.venueName == resource.data.venueName
+        && request.resource.data.suggestedDate == resource.data.suggestedDate
+        && request.resource.data.suggestedTime == resource.data.suggestedTime
+        && request.resource.data.note == resource.data.note;
+    }
+    function validMeetupUpdate() {
+      return existingMeetupMember()
+        && incomingMeetupMember()
+        && validMeetupWrite()
+        && immutableMeetupDetails()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['responses', 'status', 'updatedAt'])
+        && request.resource.data.status in ['suggested', 'confirmed', 'cancelled']
+        && request.resource.data.responses[request.auth.uid] in ['suggested', 'confirmed', 'declined', 'cancelled']
+        && (request.auth.uid == resource.data.ownerUid || request.resource.data.status != 'cancelled');
+    }
+    match /userVisits/{userId} {
+      allow read, create, update: if isOwner(userId);
+      allow delete: if false;
+    }
+
+    match /usernames/{usernameLower} {
+      allow read: if signedIn();
+      allow create: if validUsernameDoc(usernameLower);
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && validUsernameDoc(usernameLower);
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /leaderboard/{userId} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(userId);
+      allow delete: if false;
+    }
+
+    match /friendLinks/{linkId} {
+      allow read: if existingFriendMember();
+      allow create: if validFriendLinkCreate();
+      allow update: if existingFriendMember() && validFriendLinkUpdate();
+      allow delete: if existingFriendMember();
+    }
+
+    match /meetupPlans/{planId} {
+      allow read: if existingMeetupMember();
+      allow create: if validMeetupCreate();
+      allow update: if validMeetupUpdate();
+      allow delete: if existingMeetupMember();
+    }
+
+    match /venueEditors/{userId} {
+      allow read: if isOwner(userId) || isMasterVenueEditor();
+      allow create, update, delete: if isMasterVenueEditor();
+    }
+
+    match /venueProfiles/{venueId} {
+      allow read: if signedIn();
+      allow create, update: if canEditVenue(venueId) && validVenueProfileWrite(venueId);
+      allow delete: if false;
+    }
+
+    match /scanEvents/{eventId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && validVenueId(request.resource.data.venueId);
+      allow update, delete: if false;
+    }
+
+    match /issueReports/{eventId} {
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow read, update, delete: if false;
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}
+)
+        && request.resource.data.usernameLower.matches('^[a-z0-9_-]{3,20}
+    function authEmail() {
+      return signedIn() && request.auth.token.email is string
+        ? request.auth.token.email.lower()
+        : '';
+    }
+    function verifiedEmail() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+    function venueEmailOwnsVenue(venueId) {
+      return verifiedEmail() && ((venueId == 'piston-club' && authEmail() == 'info@thepistonclub.co.uk')
+        || (venueId == 'mr-watsons' && authEmail() == 'mrwatsonscafe@gmail.com')
+        || (venueId == 'gilks-garage' && authEmail() == 'info@gilksgaragecafe.com')
+        || (venueId == 'oily-rag' && authEmail() == 'info@oilyrag.com')
+        || (venueId == 'seven-mile' && authEmail() == 'hello@sevenmile.co.uk')
+        || (venueId == 'pats-baps' && authEmail() == 'cotswoldcafe@hotmail.com')
+        || (venueId == 'the-man-cave' && authEmail() == 'info@tmcbroadway.co.uk'));
+    }
+    function existingVenueProfileEmailMatches(venueId) {
+      return verifiedEmail()
+        && exists(/databases/$(database)/documents/venueProfiles/$(venueId))
+        && get(/databases/$(database)/documents/venueProfiles/$(venueId)).data.email is string
+        && get(/databases/$(database)/documents/venueProfiles/$(venueId)).data.email.lower() == authEmail();
+    }
+    function hasVenueEditorDoc() {
+      return signedIn() && exists(/databases/$(database)/documents/venueEditors/$(request.auth.uid));
+    }
+    function isMasterVenueEditor() {
+      return hasVenueEditorDoc()
+        && get(/databases/$(database)/documents/venueEditors/$(request.auth.uid)).data.master == true;
+    }
+    function canEditVenue(venueId) {
+      return validVenueId(venueId) && (
+        isMasterVenueEditor()
+        || (
+          hasVenueEditorDoc()
+          && get(/databases/$(database)/documents/venueEditors/$(request.auth.uid)).data.venues[venueId] == true
+        )
+        || (
+          signedIn()
+          && (venueEmailOwnsVenue(venueId) || existingVenueProfileEmailMatches(venueId))
+        )
+      );
+    }
+    function validVenueProfileWrite(venueId) {
+      return request.resource.data.venueId == venueId
+        && request.resource.data.keys().hasOnly([
+          'venueId',
+          'name',
+          'summary',
+          'address',
+          'opening',
+          'food',
+          'notes',
+          'website',
+          'phone',
+          'email',
+          'updatedAt',
+          'updatedBy',
+          'updatedByUsername'
+        ]);
+    }
+    function incomingFriendMember() {
+      return signedIn()
+        && request.resource.data.memberIds.size() == 2
+        && request.auth.uid in request.resource.data.memberIds;
+    }
+    function existingFriendMember() {
+      return signedIn()
+        && resource.data.memberIds.size() == 2
+        && request.auth.uid in resource.data.memberIds;
+    }
+    function incomingMeetupMember() {
+      return signedIn()
+        && request.resource.data.memberIds.size() >= 2
+        && request.resource.data.memberIds.size() <= 9
+        && request.auth.uid in request.resource.data.memberIds;
+    }
+    function existingMeetupMember() {
+      return signedIn()
+        && resource.data.memberIds.size() >= 2
+        && resource.data.memberIds.size() <= 9
+        && request.auth.uid in resource.data.memberIds;
+    }
+    function validFriendLinkWrite() {
+      return request.resource.data.keys().hasOnly([
+        'memberIds',
+        'requesterUid',
+        'requesterUsername',
+        'targetUid',
+        'targetUsername',
+        'status',
+        'createdAt',
+        'updatedAt'
+      ]);
+    }
+    function friendParticipantsMatch() {
+      return request.resource.data.requesterUid in request.resource.data.memberIds
+        && request.resource.data.targetUid in request.resource.data.memberIds
+        && request.resource.data.requesterUid != request.resource.data.targetUid;
+    }
+    function validFriendLinkCreate() {
+      return incomingFriendMember()
+        && validFriendLinkWrite()
+        && friendParticipantsMatch()
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.targetUid != request.auth.uid
+        && request.resource.data.status == 'pending';
+    }
+    function immutableFriendParticipants() {
+      return request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.requesterUid == resource.data.requesterUid
+        && request.resource.data.targetUid == resource.data.targetUid
+        && request.resource.data.requesterUsername == resource.data.requesterUsername
+        && request.resource.data.targetUsername == resource.data.targetUsername;
+    }
+    function validFriendLinkUpdate() {
+      return validFriendLinkWrite()
+        && incomingFriendMember()
+        && (
+          (
+            resource.data.status == 'pending'
+            && request.auth.uid == resource.data.targetUid
+            && immutableFriendParticipants()
+            && request.resource.data.status in ['linked', 'declined']
+          )
+          || (
+            resource.data.status == 'declined'
+            && validFriendLinkCreate()
+          )
+          || (
+            resource.data.status == 'linked'
+            && immutableFriendParticipants()
+            && request.resource.data.status == 'linked'
+          )
+        );
+    }
+    function validMeetupWrite() {
+      return request.resource.data.keys().hasOnly([
+        'memberIds',
+        'ownerUid',
+        'ownerUsername',
+        'friendUid',
+        'friendUsername',
+        'friendUids',
+        'friendUsernames',
+        'venueId',
+        'venueName',
+        'suggestedDate',
+        'suggestedTime',
+        'note',
+        'status',
+        'responses',
+        'createdAt',
+        'updatedAt'
+      ]);
+    }
+    function validMeetupCreate() {
+      return incomingMeetupMember()
+        && validMeetupWrite()
+        && validVenueId(request.resource.data.venueId)
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid in request.resource.data.memberIds
+        && request.resource.data.friendUid in request.resource.data.memberIds
+        && request.resource.data.friendUids is list
+        && request.resource.data.friendUids.size() >= 1
+        && request.resource.data.friendUids.size() <= 8
+        && request.resource.data.memberIds.hasAll(request.resource.data.friendUids)
+        && request.resource.data.status == 'suggested'
+        && request.resource.data.responses[request.auth.uid] == 'confirmed'
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 180
+        && (request.resource.data.suggestedDate == '' || request.resource.data.suggestedDate.matches('^\\d{4}-\\d{2}-\\d{2}$'))
+        && (request.resource.data.suggestedTime == '' || request.resource.data.suggestedTime.matches('^\\d{2}:\\d{2}$'));
+    }
+    function immutableMeetupDetails() {
+      return request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.ownerUsername == resource.data.ownerUsername
+        && request.resource.data.friendUid == resource.data.friendUid
+        && request.resource.data.friendUsername == resource.data.friendUsername
+        && request.resource.data.friendUids == resource.data.friendUids
+        && request.resource.data.friendUsernames == resource.data.friendUsernames
+        && request.resource.data.venueId == resource.data.venueId
+        && request.resource.data.venueName == resource.data.venueName
+        && request.resource.data.suggestedDate == resource.data.suggestedDate
+        && request.resource.data.suggestedTime == resource.data.suggestedTime
+        && request.resource.data.note == resource.data.note;
+    }
+    function validMeetupUpdate() {
+      return existingMeetupMember()
+        && incomingMeetupMember()
+        && validMeetupWrite()
+        && immutableMeetupDetails()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['responses', 'status', 'updatedAt'])
+        && request.resource.data.status in ['suggested', 'confirmed', 'cancelled']
+        && request.resource.data.responses[request.auth.uid] in ['suggested', 'confirmed', 'declined', 'cancelled']
+        && (request.auth.uid == resource.data.ownerUid || request.resource.data.status != 'cancelled');
+    }
+    match /userVisits/{userId} {
+      allow read, create, update: if isOwner(userId);
+      allow delete: if false;
+    }
+
+    match /usernames/{usernameLower} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.usernameLower == usernameLower;
+      allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /leaderboard/{userId} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(userId);
+      allow delete: if false;
+    }
+
+    match /friendLinks/{linkId} {
+      allow read: if existingFriendMember();
+      allow create: if validFriendLinkCreate();
+      allow update: if existingFriendMember() && validFriendLinkUpdate();
+      allow delete: if existingFriendMember();
+    }
+
+    match /meetupPlans/{planId} {
+      allow read: if existingMeetupMember();
+      allow create: if validMeetupCreate();
+      allow update: if validMeetupUpdate();
+      allow delete: if existingMeetupMember();
+    }
+
+    match /venueEditors/{userId} {
+      allow read: if isOwner(userId) || isMasterVenueEditor();
+      allow create, update, delete: if isMasterVenueEditor();
+    }
+
+    match /venueProfiles/{venueId} {
+      allow read: if signedIn();
+      allow create, update: if canEditVenue(venueId) && validVenueProfileWrite(venueId);
+      allow delete: if false;
+    }
+
+    match /scanEvents/{eventId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && validVenueId(request.resource.data.venueId);
+      allow update, delete: if false;
+    }
+
+    match /issueReports/{eventId} {
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow read, update, delete: if false;
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}
+)
+        && request.resource.data.username.lower() == usernameLower
+        && request.resource.data.usernameLower == usernameLower
+        && !request.resource.data.usernameLower.matches('.*(fuck|shit|cunt|nigger|nigga|bitch|twat|wanker|fag|faggot|retard|nonce|admin|staff|moderator|thepistonclub|pistonclub|restorationroute).*');
+    }
     function authEmail() {
       return signedIn() && request.auth.token.email is string
         ? request.auth.token.email.lower()
