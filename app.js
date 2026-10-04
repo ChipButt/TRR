@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "venue-ui-2026-06-23-v34";
+const APP_BUILD = "launch-audit-2026-10-04-v1";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
