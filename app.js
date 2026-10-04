@@ -2384,8 +2384,9 @@ async function sellVehicleAndStartAgain(){
   if(completionFinalizing||!state.routeCompleted||!allRepaired())return;
   completionFinalizing=true;
   try{
+    const confirmed=!!(state.emailVerified||auth?.currentUser?.emailVerified);
     state.completedVehicles=(state.completedVehicles||0)+1;
-    if(state.emailVerified||auth?.currentUser?.emailVerified)state.prizeEntries=(state.prizeEntries||0)+1;
+    if(confirmed)state.prizeEntries=(state.prizeEntries||0)+1;
     else state.pendingPrizeEntries=(state.pendingPrizeEntries||0)+1;
     state.currentVehicle=(state.currentVehicle||1)+1;
     state.repaired=baseRepaired();
@@ -2399,6 +2400,10 @@ async function sellVehicleAndStartAgain(){
     closeCard();
     closePopup();
     renderHome();
+    const entryMessage=confirmed
+      ? `You earned 1 prize draw entry. You now have ${Number(state.prizeEntries||0)} confirmed entr${Number(state.prizeEntries||0)===1?"y":"ies"}.`
+      : `Your vehicle is complete. This prize draw entry is pending until you verify your email address.`;
+    stageCard(`<h2>Vehicle Complete</h2><p>${esc(entryMessage)}</p><p>Your next restoration is ready to begin.</p><button type="button" data-close>Continue</button>`,"stageCard completionEntryCard");
   }finally{
     completionFinalizing=false;
   }
