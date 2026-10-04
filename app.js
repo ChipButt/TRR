@@ -136,7 +136,7 @@ function restoreRememberedSession(){
 function defaultAuthMode(){return "login";}
 let activeScannerStream=null, activeScannerTimer=null, scannerProcessing=false;
 let hornTapTimes=[], hornHoldTimer=null, hornStopTimer=null, hornSource=null, hornGain=null, hornAudioContext=null, hornBuffer=null, hornFallbackAudio=null, hornPressStartedAt=0, hornPressed=false;
-let layoutAdjustments=PUBLIC_BUILD?{...BAKED_LAYOUT_ADJUSTMENTS}:loadLayoutAdjustments(), selectedLayoutEl=null, layoutEditorReady=false, repairFlowActive=false;
+let layoutAdjustments=PUBLIC_BUILD?{...BAKED_LAYOUT_ADJUSTMENTS}:loadLayoutAdjustments(), selectedLayoutEl=null, layoutEditorReady=false, repairFlowActive=false, completionFinalizing=false;
 let LIVE_EDITOR_READY=false, LIVE_EDITOR_SELECTED=null, LIVE_EDITOR_DRAG=null, ACTIVE_REPAIR_DESIGN=null;
 const BOOK_ASPECT=1122/1402;
 const BOOK_ART_FRAME={x:-32+(452-(493*BOOK_ASPECT))/2,y:183,w:493*BOOK_ASPECT,h:493};
@@ -173,6 +173,12 @@ function defaultState(){
   return { uid:"", email:"", username:"", termsAccepted:false, emailVerified:false,
     repaired:baseRepaired(), completedVehicles:0, prizeEntries:0, pendingPrizeEntries:0,
     totalPartsRestored:0, currentVehicle:1, routeCompleted:false, hornBroken:false, hornBrokenCount:0, hornRestoredCount:0, log:[] };
+}
+function promotePendingPrizeEntriesIfVerified(){
+  if(!state.emailVerified||!(state.pendingPrizeEntries>0))return false;
+  state.prizeEntries=(state.prizeEntries||0)+(state.pendingPrizeEntries||0);
+  state.pendingPrizeEntries=0;
+  return true;
 }
 let state = loadLocal();
 function storageGet(key,fallback="{}"){
@@ -378,6 +384,7 @@ async function loadCloud(user){
     const saved=snap.data();
     state={...defaultState(),...saved,uid:user.uid,email:user.email||saved.email||"",emailVerified:!!user.emailVerified,repaired:{...baseRepaired(),...(saved.repaired||{})}};
   }
+  promotePendingPrizeEntriesIfVerified();
   hornTapTimes=[];
   await saveCloud();
 }
@@ -1509,7 +1516,7 @@ async function reserveUsername(username,uid){const u=username.toLowerCase(),ref=
 async function handleRegister(updateOnly=false){const email=document.getElementById("authEmail").value.trim(),pass=document.getElementById("authPassword").value,user=document.getElementById("authUsername").value.trim(),terms=document.getElementById("authTerms").checked,bad=badUsername(user); if(email)storageSet("restorationRouteLastEmail",email);if(bad)return openAuthPanel(updateOnly?"complete":"register",bad);if(!terms)return openAuthPanel(updateOnly?"complete":"register","You need to accept the terms to use the app.");try{if(updateOnly&&currentUser){await reserveUsername(user,currentUser.uid);state.username=user;state.termsAccepted=true;await fb.updateProfile(currentUser,{displayName:user}).catch(()=>{});await saveCloud();closeAuthPanel();renderHome();return}const cred=await fb.createUserWithEmailAndPassword(auth,email,pass);currentUser=cred.user;await reserveUsername(user,cred.user.uid);await fb.updateProfile(cred.user,{displayName:user}).catch(()=>{});await fb.sendEmailVerification(cred.user).catch(()=>{});state={...defaultState(),uid:cred.user.uid,email,username:user,termsAccepted:true,emailVerified:false};await saveCloud();closeAuthPanel();renderHome();openProfile("Verification email sent. Progress saves now. Prize entries become eligible once your email is verified.");}catch(e){openAuthPanel(updateOnly?"complete":"register",friendlyAuthError(e,"Could not create that account."));}}
 async function handleLogin(){try{const email=document.getElementById("authEmail").value.trim(); if(email)storageSet("restorationRouteLastEmail",email); await fb.signInWithEmailAndPassword(auth,email,document.getElementById("authPassword").value)}catch(e){const code=(e&&e.code)||"";if(code.includes("user-not-found"))return openAuthPanel("register","No account was found for that email address. Create an account to continue.");openAuthPanel("login",friendlyAuthError(e,"Could not sign in."))}}
 async function handleForgotLogin(){const email=(document.getElementById("recoverEmail")?.value||"").trim();if(!email)return openAuthPanel("forgot","Enter the email address used for this app.");try{storageSet("restorationRouteLastEmail",email);const url=location.origin&&location.pathname?location.origin+location.pathname:location.href.split(/[?#]/)[0];await fb.sendPasswordResetEmail(auth,email,{url,handleCodeInApp:false});openAuthPanel("login","Reset email sent. Open the email, set a new password, then sign in here with your email address.");}catch(e){openAuthPanel("forgot",friendlyAuthError(e,"Could not send the reset email."));}}
-function openProfile(msg=""){if(typeof msg!=="string")msg="";stageCard(`<h2>Profile</h2>${msg?`<p>${esc(msg)}</p>`:""}<p>Email: ${esc(state.email||"")}</p><p>Username: ${esc(state.username||"")}</p><p>Email verified: ${state.emailVerified?"Yes":"No"}</p>${!state.emailVerified?'<button id="resendVerification">Resend Verification Email</button><button id="refreshVerification">I Verified It</button>':""}<button id="changeUsername">Change Username</button><button id="showQuickGuide">Quick Guide</button><button id="showPrizeInfo">Prize Draw Info</button><button id="profileLogout" class="profileLogoutAsset" aria-label="Log Out"><img src="${esc(DATA.assets.menuButtons?.logout||"assets/menu_buttons_restoration_route_button_log_out_true_alpha.webp")}" alt="Log Out"></button>`,"stageCard profileCard",d=>{const r=d.querySelector("#resendVerification");if(r)r.onclick=()=>currentUser&&!currentUser.__local&&fb.sendEmailVerification(currentUser);const rf=d.querySelector("#refreshVerification");if(rf)rf.onclick=async()=>{if(!currentUser||currentUser.__local)return;await fb.reload(currentUser);state.emailVerified=!!auth.currentUser.emailVerified;await saveCloud();closeCard();openProfile();};const cu=d.querySelector("#changeUsername");if(cu)cu.onclick=()=>openUsernameEditor();const guide=d.querySelector("#showQuickGuide");if(guide)guide.onclick=()=>{closeCard();openHowTo();};const prize=d.querySelector("#showPrizeInfo");if(prize)prize.onclick=()=>{closeCard();openPrizeInfo();};const lo=d.querySelector("#profileLogout");if(lo)lo.onclick=()=>{closeCard();openLogout();};});}
+function openProfile(msg=""){if(typeof msg!=="string")msg="";stageCard(`<h2>Profile</h2>${msg?`<p>${esc(msg)}</p>`:""}<p>Email: ${esc(state.email||"")}</p><p>Username: ${esc(state.username||"")}</p><p>Email verified: ${state.emailVerified?"Yes":"No"}</p>${!state.emailVerified?'<button id="resendVerification">Resend Verification Email</button><button id="refreshVerification">I Verified It</button>':""}<button id="changeUsername">Change Username</button><button id="showQuickGuide">Quick Guide</button><button id="showPrizeInfo">Prize Draw Info</button><button id="profileLogout" class="profileLogoutAsset" aria-label="Log Out"><img src="${esc(DATA.assets.menuButtons?.logout||"assets/menu_buttons_restoration_route_button_log_out_true_alpha.webp")}" alt="Log Out"></button>`,"stageCard profileCard",d=>{const r=d.querySelector("#resendVerification");if(r)r.onclick=()=>currentUser&&!currentUser.__local&&fb.sendEmailVerification(currentUser);const rf=d.querySelector("#refreshVerification");if(rf)rf.onclick=async()=>{if(!currentUser||currentUser.__local)return;await fb.reload(currentUser);state.emailVerified=!!auth.currentUser.emailVerified;promotePendingPrizeEntriesIfVerified();await saveCloud();closeCard();openProfile(state.emailVerified?"Email verified. Any pending prize entries are now confirmed.":"Email verification has not completed yet.");};const cu=d.querySelector("#changeUsername");if(cu)cu.onclick=()=>openUsernameEditor();const guide=d.querySelector("#showQuickGuide");if(guide)guide.onclick=()=>{closeCard();openHowTo();};const prize=d.querySelector("#showPrizeInfo");if(prize)prize.onclick=()=>{closeCard();openPrizeInfo();};const lo=d.querySelector("#profileLogout");if(lo)lo.onclick=()=>{closeCard();openLogout();};});}
 function openPrizeInfo(){
   const prize=String(DATA.terms?.prize||"To be announced");
   const endDate=String(DATA.terms?.endDate||"To be announced");
@@ -2332,21 +2339,27 @@ function openVehicleCompletionRestoration(){
 }
 function openRouteCompleteCard(){openVehicleCompletionRestoration();}
 async function sellVehicleAndStartAgain(){
-  state.completedVehicles=(state.completedVehicles||0)+1;
-  if(state.emailVerified||auth?.currentUser?.emailVerified)state.prizeEntries=(state.prizeEntries||0)+1;
-  else state.pendingPrizeEntries=(state.pendingPrizeEntries||0)+1;
-  state.currentVehicle=(state.currentVehicle||1)+1;
-  state.repaired=baseRepaired();
-  state.routeCompleted=false;
-  state.hornBroken=false;
-  state.hornRestoredCount=(state.hornRestoredCount||0)+1;
-  state.log.push({type:"sell_vehicle_start_again",at:new Date().toISOString()});
-  storageSet(COMPLETION_NOTICE_KEY,"");
-  await saveCloud();
-  repairFlowActive=false;
-  closeCard();
-  closePopup();
-  renderHome();
+  if(completionFinalizing||!state.routeCompleted||!allRepaired())return;
+  completionFinalizing=true;
+  try{
+    state.completedVehicles=(state.completedVehicles||0)+1;
+    if(state.emailVerified||auth?.currentUser?.emailVerified)state.prizeEntries=(state.prizeEntries||0)+1;
+    else state.pendingPrizeEntries=(state.pendingPrizeEntries||0)+1;
+    state.currentVehicle=(state.currentVehicle||1)+1;
+    state.repaired=baseRepaired();
+    state.routeCompleted=false;
+    state.hornBroken=false;
+    state.hornRestoredCount=(state.hornRestoredCount||0)+1;
+    state.log.push({type:"sell_vehicle_start_again",at:new Date().toISOString()});
+    storageSet(COMPLETION_NOTICE_KEY,"");
+    await saveCloud();
+    repairFlowActive=false;
+    closeCard();
+    closePopup();
+    renderHome();
+  }finally{
+    completionFinalizing=false;
+  }
 }
 async function resetRouteForNextVehicle(){return sellVehicleAndStartAgain();}
 
