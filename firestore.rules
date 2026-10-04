@@ -20,17 +20,20 @@ service cloud.firestore {
         ? request.auth.token.email.lower()
         : '';
     }
+    function verifiedEmail() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
     function venueEmailOwnsVenue(venueId) {
-      return (venueId == 'piston-club' && authEmail() == 'info@thepistonclub.co.uk')
+      return verifiedEmail() && ((venueId == 'piston-club' && authEmail() == 'info@thepistonclub.co.uk')
         || (venueId == 'mr-watsons' && authEmail() == 'mrwatsonscafe@gmail.com')
         || (venueId == 'gilks-garage' && authEmail() == 'info@gilksgaragecafe.com')
         || (venueId == 'oily-rag' && authEmail() == 'info@oilyrag.com')
         || (venueId == 'seven-mile' && authEmail() == 'hello@sevenmile.co.uk')
         || (venueId == 'pats-baps' && authEmail() == 'cotswoldcafe@hotmail.com')
-        || (venueId == 'the-man-cave' && authEmail() == 'info@tmcbroadway.co.uk');
+        || (venueId == 'the-man-cave' && authEmail() == 'info@tmcbroadway.co.uk'));
     }
     function existingVenueProfileEmailMatches(venueId) {
-      return signedIn()
+      return verifiedEmail()
         && exists(/databases/$(database)/documents/venueProfiles/$(venueId))
         && get(/databases/$(database)/documents/venueProfiles/$(venueId)).data.email is string
         && get(/databases/$(database)/documents/venueProfiles/$(venueId)).data.email.lower() == authEmail();
