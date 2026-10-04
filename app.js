@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "launch-audit-2026-10-04-v5";
+const APP_BUILD = "launch-audit-2026-10-04-v6";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -369,6 +369,7 @@ async function initFirebase(){
       }
     });
   }catch(e){
+    authStateResolved=true;
     renderHome();
     setTimeout(setScales,80);
     if(restoreRememberedSession())return;
@@ -852,8 +853,15 @@ function scheduleHowTo(renderVersion=homeRenderVersion){
   if(howToShownThisLoad||venueAccountSession||LOCAL_TEST_MODE)return;
   setTimeout(()=>{
     if(howToShownThisLoad||renderVersion!==homeRenderVersion||venueAccountSession||LOCAL_TEST_MODE)return;
+    if(!authStateResolved){
+      scheduleHowTo(homeRenderVersion);
+      return;
+    }
     if(!appSessionActive()||!state.username||!state.termsAccepted)return;
-    if(document.querySelector("#authPanel")||overlayRoot.querySelector(".popCard,.popupShell,[data-card-shell]"))return;
+    if(document.querySelector("#authPanel")||overlayRoot.querySelector(".popCard,.popupShell,[data-card-shell]")){
+      scheduleHowTo(homeRenderVersion);
+      return;
+    }
     openHowTo();
   },650);
 }
