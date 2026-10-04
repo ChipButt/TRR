@@ -878,7 +878,7 @@ async function mountPreparedPopup(shell,stage,token=0){
   await nextFrame();
   hideLoadingScreen(token);
 }
-function closePopup(){overlayRoot.innerHTML="";}
+function closePopup(){overlayRoot.innerHTML="";scheduleHowTo();}
 function menuButtonAsset(l){
   const n=(l.name||"").toLowerCase();
   if(n.includes("leaderboard"))return MENU_SET_UP_MEET_ASSET;
