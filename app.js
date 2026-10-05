@@ -10,7 +10,7 @@ window.addEventListener("error", e=>{
     }
   }catch(_){}
 });
-const APP_BUILD = "launch-audit-2026-10-04-v6";
+const APP_BUILD = "launch-audit-2026-10-05-v7";
 const APP_BUILD_STORE_KEY = "restorationRoutePublicAppBuild";
 const PUBLIC_BUILD = true;
 (function clearPublicBuildEditorOverrides(){
@@ -2498,8 +2498,51 @@ async function repairVenue(id,source="scan"){
 }
 async function scanEvent(id,source,dup){if(!firebaseReady||!currentUser||currentUser.__local)return;await fb.addDoc(fb.collection(db,"scanEvents"),{uid:currentUser.uid,email:currentUser.email||state.email||"",username:state.username||"",venueId:id,source,duplicate:dup,vehicleNumber:state.currentVehicle||1,accepted:true,createdAt:fb.serverTimestamp()}).catch(()=>{});}
 async function completeVehicle(type){if(!allRepaired())return;state.log.push({type,at:new Date().toISOString()});await sellVehicleAndStartAgain();}
+async function matchSpecialScanToken(raw){
+  let s=String(raw||""),token=s;
+  try{
+    const u=new URL(s);
+    token=u.searchParams.get("scan")||u.searchParams.get("code")||s;
+  }catch{}
+  return DATA.specialScanTokenHashes?.[await sha256(token.trim())]||null;
+}
+async function processHornRepairScan(source="horn_repair_qr"){
+  if(!requireLogin())return false;
+  if(!state.hornBroken){
+    card(`<h2>Horn Already Working</h2><p>The horn repair code was recognised, but your horn is not broken, so no progress has changed.</p><button data-close>Close</button>`);
+    return true;
+  }
+  try{
+    await ensureOnlineProgressSession();
+  }catch(e){
+    openProgressSaveProblem(e.message||"Your secure login could not reconnect.",()=>processHornRepairScan(source));
+    return false;
+  }
+  const previous={...state,repaired:{...(state.repaired||{})},log:[...(state.log||[])]};
+  try{
+    stopHornAudio(true);
+    hornTapTimes=[];
+    state.hornBroken=false;
+    state.hornRestoredCount=(state.hornRestoredCount||0)+1;
+    state.log.push({type:"horn_repaired_by_qr",source,at:new Date().toISOString()});
+    await saveCloud();
+    renderHome();
+    card(`<h2>Horn Repaired</h2><p>The horn repair code was accepted. Your horn is working again.</p><button data-close>Continue</button>`);
+    return true;
+  }catch(e){
+    state=previous;
+    saveLocal();
+    openProgressSaveProblem("The horn repair could not be saved to your account. Check your connection and try again.",()=>processHornRepairScan(source));
+    return false;
+  }
+}
 async function processScanToken(raw,source="qr_scan"){
   if(!requireLogin())return null;
+  const special=await matchSpecialScanToken(raw);
+  if(special==="horn-repair"){
+    await processHornRepairScan(source);
+    return {special:"horn-repair"};
+  }
   const v=await matchToken(raw);
   if(!v){card(`<h2>Route Code Not Recognised</h2><p>This code could not be recognised. Please centre the private route code in the scanner and try again.</p><button data-close>Close</button>`);return null;}
   await repairVenue(v.id,source);

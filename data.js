@@ -2555,7 +2555,15 @@ window.RESTORATION_ROUTE_DATA = {
     "92aeb71e6e5f9ff83f9b4b05b06dec0e314dcb61b2459bdff704944f72281a6b": "gilks-garage",
     "51417b1981705df7e4d9ba9d6de5c658d9caaca7a7645d77affc078ccc3f4203": "long-itch-diner",
     "e5cb292c5b642a193fb299b6a8f2db415aec944e295e352ec5e513d42d835eab": "pats-baps",
-    "1fe03a5692a95322243b80440d5744fade6c875295aceb220eaf3b1ad2f1b02b": "the-man-cave"
+    "1fe03a5692a95322243b80440d5744fade6c875295aceb220eaf3b1ad2f1b02b": "the-man-cave",
+    "1c096679c38a78c262364dd9c3d7e8a566013ad3c68791d2d281a4cdb2cd36f9": "piston-club",
+    "a8a70fee5f78dcc421411d26c2e71e9210a5177b4d8dd0aa917cd3bbbaaf01fb": "mr-watsons",
+    "0e5261dd0c2d5dcc1f2aef60c807f8519b347733e5a607c84f976ee877159ef0": "gilks-garage",
+    "317fdde1a18c3da5ecf8f2a2476dae9f612400da7d62f9fd91e39d4e043ce90f": "oily-rag",
+    "f64bd1f55fa165d960f5fb346a58838eb49841046eeb51840d7c4af45e1ab3b4": "long-itch-diner",
+    "914fc1566d3b63575092e7521fe367b89f2177fd692335420c61153a2977cf4a": "pats-baps",
+    "26d9cfbb8793e7a71977d412b54b03506f2b84c2d7ccbedec23c62dad62d25f8": "seven-mile",
+    "3f7be59533ba79ee5f8e9f55f18063315175bc52259c4142336f6ab516646493": "the-man-cave"
   },
   "privateMarkerPatterns": {
     "1010001011110010111010101100100001000110011001110": "piston-club",
@@ -2608,5 +2616,8 @@ window.RESTORATION_ROUTE_DATA = {
     "assets/garage_directory_assets_directory_tab_buttons_the_long_itch_diner_tab_button.png": "assets/garage_directory_assets_directory_tab_buttons_the_long_itch_diner_tab_button.webp",
     "assets/garage_directory_assets_directory_tab_buttons_pats_baps_tab_button.png": "assets/garage_directory_assets_directory_tab_buttons_pats_baps_tab_button.webp",
     "assets/garage_directory_assets_directory_tab_buttons_seven_mile_tab_button.png": "assets/garage_directory_assets_directory_tab_buttons_seven_mile_tab_button.webp"
+  },
+  "specialScanTokenHashes": {
+    "1993711a5ca1808e35fa03f10cbf136cf6fd50ef295156e2d5e813c1aea10242": "horn-repair"
   }
 };

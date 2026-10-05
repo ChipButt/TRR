@@ -1,5 +1,5 @@
 (function(){
-  const APP_JS = "app.js?build=launch-audit-2026-10-04-v6";
+  const APP_JS = "app.js?build=launch-audit-2026-10-05-v7";
 
   function fail(error){
     console.error("Restoration Route loader failed", error);
